@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<!--
+  v2 changes (to match session-generator.html's v21):
+  - Added a Supabase email magic-link login gate (no sign-in, no page).
+  - The ~18 hand-written category sections that used to hold static drill
+    HTML have been replaced by a live "Live library" section, fetched from
+    Supabase's `drills` table and grouped by age mode then category — pick a
+    mode tab to browse it. This page is read-only (browsing/reference only,
+    same as before); edits happen in Match Fit (session-generator.html).
+  - The per-source narrative prose that used to sit above each old
+    hand-written section (era-by-era write-ups like "U6 Sessions (Club
+    Archive)" or "Coaching Drills (Philip Kerr, 2004)") doesn't exist as data
+    in the `drills` table, so it can't be regenerated per-category the way it
+    used to render. Instead it's kept once, as a single "About these sources"
+    block just above the live library, rather than fabricated or dropped.
+    The old hand-written "Data Notes" section and footer (which are
+    commentary, not drill data) are left exactly as they were.
+  - IMPORTANT (human action needed): same Supabase Auth → URL Configuration
+    note as session-generator.html — the real hosting URL needs to be
+    allow-listed there for magic-link sign-in to redirect back correctly.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>U11 Session Block Library</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  :root{
+    --ink:#16241C;
+    --paper:#F3EEE1;
+    --paper-2:#EAE3D1;
+    --pitch:#1F4D33;
+    --pitch-light:#2E6B49;
+    --tan:#A8672B;
+    --tan-light:#C98A2B;
+    --navy:#2A3E5C;
+    --navy-light:#3E567A;
+    --rule:#C9BFA1;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'IBM Plex Sans', sans-serif;
+    line-height:1.5;
+  }
+  .wrap{
+    max-width:760px;
+    margin:0 auto;
+    padding:28px 20px 60px;
+  }
+  header{
+    border-bottom:3px solid var(--ink);
+    padding-bottom:18px;
+    margin-bottom:22px;
+  }
+  .kicker{
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-weight:700;
+    font-size:13px;
+    letter-spacing:0.02em;
+    color:var(--pitch);
+    margin:0 0 6px;
+  }
+  h1{
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-weight:700;
+    font-size:clamp(28px,7vw,38px);
+    margin:0 0 8px;
+    line-height:1.05;
+    color:var(--ink);
+  }
+  header p{
+    margin:0;
+    font-size:15px;
+    color:#3E4A3F;
+    max-width:56ch;
+  }
+
+  /* Timeline strip */
+  .timeline-label{
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-weight:600;
+    font-size:14px;
+    color:var(--ink);
+    margin:0 0 10px;
+  }
+  .timeline{
+    display:flex;
+    width:100%;
+    height:54px;
+    border-radius:3px;
+    overflow:hidden;
+    border:2px solid var(--ink);
+    margin-bottom:6px;
+  }
+  .tl-seg{
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    padding:0 10px;
+    border-right:2px solid var(--ink);
+    color:#fff;
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+  }
+  .tl-seg:last-child{border-right:none;}
+  .tl-seg .name{font-weight:700; font-size:13px; line-height:1.1;}
+  .tl-seg .mins{font-size:11px; opacity:0.85; font-weight:600;}
+  .tl-warm{background:#5B6B4F; flex:13;}
+  .tl-pass{background:var(--tan); flex:10;}
+  .tl-tackle{background:var(--navy); flex:10;}
+  .tl-attack{background:var(--tan-light); flex:10;}
+  .tl-game{background:var(--pitch); flex:13;}
+  .timeline-note{
+    font-size:13px;
+    color:#5B5B4F;
+    margin:0 0 34px;
+  }
+
+  section.category{
+    margin-bottom:34px;
+  }
+  .cat-head{
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+    border-bottom:2px solid var(--ink);
+    padding-bottom:6px;
+    margin-bottom:4px;
+  }
+  .cat-head h2{
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-weight:700;
+    font-size:21px;
+    margin:0;
+    color:var(--ink);
+  }
+  .cat-count{
+    font-size:13px;
+    color:#6B6255;
+    font-weight:500;
+  }
+  .cat-desc{
+    font-size:14px;
+    color:#4A4A3E;
+    margin:8px 0 14px;
+    max-width:60ch;
+  }
+
+  .drill{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:14px;
+    padding:11px 0;
+    border-bottom:1px solid var(--rule);
+  }
+  .drill:last-child{border-bottom:none;}
+  .drill-main{flex:1;}
+  .drill-name{
+    font-weight:600;
+    font-size:15px;
+    margin:0 0 3px;
+  }
+  .drill-desc{
+    font-size:13.5px;
+    color:#5B5B4F;
+    margin:0;
+  }
+  .drill-meta{
+    flex-shrink:0;
+    text-align:right;
+    white-space:nowrap;
+  }
+  .tag{
+    display:inline-block;
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-weight:700;
+    font-size:11px;
+    padding:3px 8px;
+    border-radius:2px;
+    color:#fff;
+    margin-left:5px;
+  }
+  .tag-hurling{background:var(--pitch);}
+  .tag-football{background:var(--navy);}
+  .tag-both{background:var(--tan);}
+  .tag-u10{background:#6B4A7A;}
+  .tag-u8{background:#8C7A3A;}
+  .tag-nursery{background:#3E7A6B;}
+  .tag-u6{background:#B85C38;}
+  .tag-u7{background:#4A7A8C;}
+  .tag-u8new{background:#8C7A3A;}
+  .tag-u9{background:#5C7A38;}
+  .tag-u12{background:#8C4A5C;}
+  .tag-u16{background:#2E5C4A;}
+  .tag-cul67{background:#A6664B;}
+  .tag-cul810{background:#3F6E7A;}
+  .tag-cul1113{background:#6E5A2E;}
+  .skill-block{margin-bottom:14px;}
+  .skill-name{font-family:'IBM Plex Sans Condensed', sans-serif; font-weight:700; font-size:15px; margin:0 0 4px; color:var(--ink);}
+  .level-line{font-size:13.5px; color:#3E3E32; margin:0 0 4px; line-height:1.55;}
+  .level-line strong{color:var(--pitch);}
+  .meta-line{
+    font-size:11.5px;
+    color:#8A8271;
+    margin-top:5px;
+    font-weight:500;
+  }
+
+  footer{
+    margin-top:10px;
+    padding-top:16px;
+    border-top:2px solid var(--ink);
+    font-size:13px;
+    color:#6B6255;
+  }
+
+  @media (max-width:480px){
+    .tl-seg .mins{display:none;}
+    .drill{flex-direction:column;}
+    .drill-meta{text-align:left;}
+  }
+
+  /* ---- Auth / login gate ---- */
+  #loginScreen{
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px 18px;
+  }
+  .login-card{
+    width:100%;
+    max-width:380px;
+    border:2px solid var(--ink);
+    border-radius:10px;
+    padding:26px 22px;
+    background:var(--paper);
+  }
+  .login-card h1{ font-family:'IBM Plex Sans Condensed', sans-serif; font-weight:700; font-size:22px; margin:0 0 4px; color:var(--ink); }
+  .login-card p.login-sub{ font-size:13.5px; color:#5B5B4F; margin:0 0 18px; }
+  .login-field{ margin-bottom:12px; }
+  .login-field label{
+    display:block;
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-weight:600;
+    font-size:12.5px;
+    color:#6B6255;
+    margin-bottom:5px;
+  }
+  .login-field input{
+    width:100%;
+    padding:10px 12px;
+    font-size:14px;
+    border:1.5px solid var(--rule);
+    border-radius:7px;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'IBM Plex Sans', sans-serif;
+  }
+  .login-btn{
+    width:100%;
+    padding:12px;
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-weight:700;
+    font-size:15px;
+    background:var(--pitch);
+    color:#fff;
+    border:none;
+    border-radius:6px;
+    cursor:pointer;
+  }
+  .login-msg{ font-size:13px; margin:10px 0 0; }
+  .login-msg.ok{ color:var(--pitch); }
+  .login-msg.err{ color:#A6362C; }
+  .authbar{
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    gap:8px;
+    font-size:11.5px;
+    color:#6B6255;
+    margin-bottom:10px;
+  }
+  .authbar button{
+    background:none;
+    border:none;
+    color:var(--navy);
+    font-size:11.5px;
+    font-weight:600;
+    text-decoration:underline;
+    cursor:pointer;
+    padding:0;
+  }
+
+  /* ---- Live library ---- */
+  .mode-tabs{ display:flex; gap:6px; flex-wrap:wrap; margin:10px 0 18px; }
+  .mode-tab{
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-weight:600;
+    font-size:13px;
+    padding:8px 13px;
+    border-radius:20px;
+    border:2px solid var(--ink);
+    background:transparent;
+    color:var(--ink);
+    cursor:pointer;
+  }
+  .mode-tab.active{ background:var(--ink); color:var(--paper); }
+  .lib-banner{
+    border:1.5px dashed var(--rule);
+    border-radius:8px;
+    padding:12px 14px;
+    font-size:13px;
+    color:#6B6255;
+    margin-bottom:16px;
+  }
+  .lib-banner.err{ border-color:#A6362C; color:#A6362C; }
+</style>
+</head>
+<body>
+
+<div id="loginScreen" style="display:none;">
+  <div class="login-card">
+    <h1>Sign in</h1>
+    <p class="login-sub">The Session Block Library is for Carrig GAA coaches only. Enter your email and we'll send you a sign-in link.</p>
+    <div class="login-field">
+      <label for="loginEmail">Email</label>
+      <input type="email" id="loginEmail" placeholder="you@example.com" autocomplete="email">
+    </div>
+    <button class="login-btn" id="loginSendBtn">Send magic link</button>
+    <p class="login-msg" id="loginMsg"></p>
+  </div>
+</div>
+
+<div id="appRoot" style="display:none;">
+<div class="wrap">
+  <div class="authbar" id="authBar"></div>
+
+  <header>
+    <p class="kicker">U6–U11 Hurling/Football — Coaching Reference</p>
+    <h1>Session Block Library</h1>
+    <p>Seventy-seven of this team's own U10/U11 sessions (source: TSheehan) across two seasons — U10 (last year, February–November) and U11 (this year, February–August) — plus this club's own U6, U7, U8 and U9 weekly session archives (228 drills, extracted from over 115 further session plans), plus two external reference libraries: U8 drills (source: Monaghan Drills) and a Nursery Programme for ages 4–8 (source: GAA Fun Do Nursery Programme, 2007). All broken into component blocks and grouped by what each block is actually training.</p>
+  </header>
+
+  <p class="timeline-label">The skeleton every session follows</p>
+  <div class="timeline">
+    <div class="tl-seg tl-warm"><span class="name">Warm-up</span><span class="mins">10–20 min</span></div>
+    <div class="tl-seg tl-pass"><span class="name">Passing</span><span class="mins">~10 min</span></div>
+    <div class="tl-seg tl-tackle"><span class="name">Tackling</span><span class="mins">~10 min</span></div>
+    <div class="tl-seg tl-attack"><span class="name">Attack / Shoot</span><span class="mins">~10 min</span></div>
+    <div class="tl-seg tl-game"><span class="name">Game</span><span class="mins">10–15 min</span></div>
+  </div>
+  <p class="timeline-note">Total session: 50–65 min (Feb sessions and the S52 wall-ball session run longer). The 5-part skeleton holds across both age groups and both seasons — only the drill filling each slot, and how much technique-coaching gets folded in, changes.</p>
+
+  <p class="timeline-label" style="margin-top:6px;">Venue &amp; squad progression</p>
+  <p class="timeline-note" style="margin-bottom:10px;">U10 season (last year): grass pitches July–October, closing out indoors/wall-based in November as evenings draw in. U11 season (this year): indoor Feb → astro early March → grass pitches from mid-March. Nice bookend — both seasons start or end with the same indoor/wall format when outdoor conditions don't allow full pitch use.</p>
+  <p class="timeline-note" style="margin-bottom:20px;">U10 also runs a handful of combined-code evenings ("Hurling Football" in one session, S32/S34/S51) — something the U11 season never does; U11 always keeps hurling and football in separate weeks.</p>
+
+  <div style="margin-bottom:34px; font-size:13px; color:#5B5B4F;">
+    <span class="tag tag-hurling" style="margin-left:0;">Hurling</span>
+    <span class="tag tag-football">Football</span>
+    <span class="tag tag-both">Both codes</span>
+    <span class="tag tag-u10">U10 (last season)</span>
+    <span class="tag tag-u8">U8 (Monaghan Drills)</span>
+    <span class="tag tag-nursery">Nursery (GAA Fun Do)</span>
+    <span style="margin-left:6px;">— colour = code; purple/olive/teal = external reference sources</span>
+  </div>
+
+  <section class="category" style="margin-bottom:28px;">
+    <div class="cat-head">
+      <h2>About these sources</h2>
+      <span class="cat-count">context for the live library below</span>
+    </div>
+    <p class="cat-desc">The live library below pulls every drill from the shared database without the per-source write-ups that used to sit above each hand-written section. Here's that context, kept once instead of per-drill:</p>
+    <p class="cat-desc"><strong>C&uacute;l Camp Hurling Resource</strong> (Kellogg&rsquo;s GAA C&uacute;l Camps / Leinster GAA) — the official five-day camp programme for three age bands (6&ndash;7, 8&ndash;10 and 11&ndash;13), each day built from six activities (warm-up, skill games and team games/small-sided games), plus 8 standalone Wall Ball Sessions drills. 98 entries total. Hurling-only; every entry is tagged <code>age:"both"</code> since the source doesn't distinguish finer ages within each band. The 11&ndash;13 band and Wall Ball Sessions feed the U10/U11/U12 mode below, the 8&ndash;10 band feeds U8/U9, and the 6&ndash;7 band feeds U6/U7.</p>
+    <p class="cat-desc"><strong>Coaching Drills (Philip Kerr, 2004)</strong> — a football coaching manual aimed at older/more advanced players: warm-ups and speed/agility work, passing and evasion drills, tackling technique, shooting drills, and tactical small-sided games. 30 entries, 27 with a layout diagram traced from the manual's own hand-drawn diagrams. Football-only; credited to Philip Kerr, 2004 (pkerrme@btinternet.com). Feeds the 13-18 mode below.</p>
+    <p class="cat-desc"><strong>Football &amp; Hurling Coaching Classes (GAA Fun Do, 2007)</strong> — the official GAA Fun Do resource covering 27 technique-based skills taught at U-8, U-10 and U-12 (catching/striking, kicking/passing, ball-carrying, tackling and evasion), each broken into Practise the Technique drills and Develop the Skill fun/modified games. 124 football + 141 hurling entries. Credited to GAA National Games Development Committee. U-8 entries also feed U8/U9 below; U-10/U-12 feed U10/U11/U12.</p>
+    <p class="cat-desc"><strong>U6&ndash;U9 Sessions (Club Archive)</strong> — drills extracted from this club's own weekly session plans, not yet cross-checked with the team for authorship the way the U10/U11 sessions (TSheehan) were. Duplicates across weeks are merged into one entry. Feeds the U6/U7 and U8/U9 modes below.</p>
+    <p class="cat-desc">Everything else in the live library (the bulk of U10/U11/U12 and the U8/U9 "Monaghan Drills" set) is this team's own session records, as logged in the Data Notes and footer below.</p>
+  </section>
+
+  <p class="timeline-label" style="margin-top:10px;">Live library</p>
+  <p class="timeline-note">Pulled live from the shared drill database (the same one Match Fit builds sessions from) — pick an age mode to browse what's in it. Edits made in Match Fit show up here too. This page is still browsing/reference only; it doesn't build sessions.</p>
+
+  <div class="mode-tabs" id="libModeTabs">
+    <button class="mode-tab active" data-mode="core">U10 / U11 / U12</button>
+    <button class="mode-tab" data-mode="teen">13-18</button>
+    <button class="mode-tab" data-mode="u89">U8 / U9</button>
+    <button class="mode-tab" data-mode="u67">U6 / U7</button>
+  </div>
+
+  <div id="liveCategories">
+    <p style="color:#6B6255; font-size:14px;">Loading…</p>
+  </div>
+
+  <section class="category">
+    <div class="cat-head">
+      <h2>Data Notes</h2>
+      <span class="cat-count">worth a quick fix</span>
+    </div>
+    <p class="cat-desc">Small inconsistencies spotted while going through the source documents — flagging in case the originals get cleaned up.</p>
+    <div class="drill"><div class="drill-main"><p class="drill-name">S28 and S29 (U11) headed "Hurling" but contain football drills (kick-passing, point-scoring off a kick) — looks like a copy-paste from the football template.</p></div></div>
+    <div class="drill"><div class="drill-main"><p class="drill-name">Date banners repeat: U11 S1's banner reads "Feb 14th" against a filename of Feb 6th; U11 S28's reads "June 12th" (same as S27); U11 S16's reads "April 8th" (same as S14); U10 S34's reads "July 23rd" (same as S32); U10 S51's reads "Oct 22nd" (same as S50, which is actually Oct 22 — so S51 should likely read Oct 24).</p></div></div>
+    <div class="drill"><div class="drill-main"><p class="drill-name">U11 S18's closing "Hurling Game Setup" block isn't actually an anomaly — it's the same Team Shape &amp; Positioning walkthrough that also appears at U11 S9, just under a different label.</p></div></div>
+    <div class="drill"><div class="drill-main"><p class="drill-name">U10 S22's date banner also reads "May 14th" — identical to S20's, despite the filename giving S22 as May 23rd.</p></div></div>
+    <div class="drill"><div class="drill-main"><p class="drill-name">U10 S28's attendance line reads "1 Attending approx" against a full two-team sheet of ~15 names — almost certainly a typo for a number closer to 14–15.</p></div></div>
+    <div class="drill"><div class="drill-main"><p class="drill-name">Two unrelated drills share the name "Around the Square": the hurling pressing/keep-away version (U11 S16) and a football 1v1 attack-the-defender version (U10 S14, S16). Worth renaming one in the source files to avoid confusion.</p></div></div>
+    <div class="drill"><div class="drill-main"><p class="drill-name">In the Monaghan Drills U8 pack, "Session 11" appears twice with entirely different content (an incomplete "Kicking to Space" version, then a full version reusing Session 1's warm-up and stations) — likely a document-assembly duplication in the source PDF rather than two genuine sessions.</p></div></div>
+    <div class="drill"><div class="drill-main"><p class="drill-name">Session numbering overlaps between the two age-group sequences — both have sessions numbered in the 30s–40s (e.g. "Session 36" exists in both U10 and U11). This library disambiguates U10 entries with a "U10" prefix; worth doing the same in the source filenames if the two ever get merged into one folder.</p></div></div>
+    <div class="drill"><div class="drill-main"><p class="drill-name">U6–U9 club archive entries (added from Coaching.zip) were extracted automatically: a script pulled out bold, timed section headers from each week's document and merged repeats of the same named drill/game across weeks into one entry. Header wording is often generic ("Football", "Skill 1", "Hurling & Football") where a session didn't name its drill distinctly — those entries are still included since the description body is genuine content, just under a plain label. Not manually reviewed line-by-line the way the U10/U11 library was, so expect some rough edges (an odd merge, a mis-tagged code, a stray coaching cue that isn't really a standalone drill).</p></div></div>
+    <div class="drill"><div class="drill-main"><p class="drill-name">U6–U9 authorship in the source zip isn't stated the way TSheehan is credited for U10/U11 — assumed to be the same club's own coaching archive but worth confirming before crediting it publicly.</p></div></div>
+    <div class="drill"><div class="drill-main"><p class="drill-name">U10 S31's filename reads "July 16th" but its own date banner reads "June 25th" — same date-banner-vs-filename mismatch pattern as the other anomalies above; filed under S31 (its filename position) here.</p></div></div>
+    <div class="drill"><div class="drill-main"><p class="drill-name">The Monaghan Drills U8 reference library actually has 45 drills, not the 34 the footer used to say — corrected below.</p></div></div>
+    <div class="drill"><div class="drill-main"><p class="drill-name">The GAA Fun Do Football and Hurling Coaching Classes resources (2007) were extracted from genuinely awkward two-column PDFs — a plain text extraction interleaved side-by-side drill boxes into nonsense. Entries were rebuilt with a column-aware parser (page-image reconstruction as a fallback for pages that still garbled), then grouped by age (U-8/U-10/U-12) and skill and lightly deduplicated. Not reviewed line-by-line against the source PDFs, so treat this batch like the U6–U9 club archive: generally trustworthy, occasional rough edges (a stray word bled in from a neighbouring box, a description that trails into the next drill's intro line).</p></div></div>
+  </section>
+
+  <footer>
+    U11 (this year): Sessions 1–2 (Feb), 4–5, 7–11 (March), 12–18 (April), 22–24 (May), 26–29 (June), 36–39 (July–Aug), 43 (Aug 26) — 28 sessions. Source: TSheehan.<br>
+    U10 (last year): Sessions 1–19 (Feb–May), 20–25 (May–June), 26–31 (June–July), 32–39 (July–Aug), 41–45 (Sept), 46–52 (Oct–Nov) — 49 sessions. Source: TSheehan. (S19, S25, S31 and S45 were filled in from Coaching.zip after this library's first pass, which had them flagged as missing.)<br>
+    77 sessions total. S = session number within each age group's own sequence.<br>
+    U6 club archive: 45 drills, extracted from 26 weekly session plans.<br>
+    U7 club archive: 60 drills, extracted from 24 training session plans.<br>
+    U8 club archive: 48 drills, extracted from 27 dated session plans (separate from the Monaghan Drills pack below).<br>
+    U9 club archive: 75 drills, extracted from 41 dated session plans.<br>
+    228 U6–U9 drills total, from 118 session documents. Source: club coaching archive (Coaching.zip).<br>
+    U8 reference library: 45 drills across 8 categories, 9–12 sessions. Source: Monaghan Drills.<br>
+    Nursery reference library (ages 4–8): 196 exercises across 9 skill areas x 3 levels, plus 4 sample sessions. Source: GAA Fun Do Nursery Programme (2007), GAA National Games Development Committee.<br>
+    Football Coaching Classes: 124 drills/activities across 19 skills (40 at U-8, 51 at U-10, 33 at U-12). Source: GAA Fun Do Football Resource (2007), GAA National Games Development Committee.<br>
+    Hurling Coaching Classes: 141 drills/activities across 21 skills (48 at U-8, 48 at U-10, 45 at U-12). Source: GAA Fun Do Hurling Resource (2007), GAA National Games Development Committee.<br>
+    265 drills/activities total from the two Coaching Classes resources — 88 U-8 entries feed the session generator's U8/U9 mode, and 177 U-10/U-12 entries feed its U10/U11/U12 mode.<br>
+    U16/18 Drills &amp; Games: 16 drills/games (football-only), all with a diagram. Source: Cavan GAA Coaching &amp; Games Development. Feeds the session generator's U10/U11/U12 mode under a new U16/18 age filter.<br>
+    C&uacute;l Camp Hurling Resource: 98 entries (hurling-only, all with a diagram) — 90 camp-day activities across three age bands (30 each at 6&ndash;7, 8&ndash;10 and 11&ndash;13, five days &times; six activities per band) plus 8 standalone Wall Ball Sessions drills. Source: Kellogg's GAA C&uacute;l Camps Hurling Resource, Leinster GAA. The 11&ndash;13 band and Wall Ball Sessions feed the session generator's U10/U11/U12 (core) mode, the 8&ndash;10 band feeds its U8/U9 mode, and the 6&ndash;7 band feeds its U6/U7 mode.<br>
+    Coaching Drills (Philip Kerr, 2004): 30 entries (football-only, 27 with a diagram) — warm-ups, speed/agility work, passing and evasion drills, tackling technique, shooting drills and tactical games for older players. Source: Philip Kerr, 2004. Age isn't stated in the source, so all entries are tagged U16/18 and feed the session generator's 13-18 mode.
+  </footer>
+
+</div>
+</div><!-- /#appRoot -->
+
+<script>
+const SUPABASE_URL = "https://mwjqdtsfsjefxpzfjcex.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im13anFkdHNmc2plZnhwemZqY2V4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODczNTE2NDMsImV4cCI6MjEwMjkyNzY0M30.aBGfOBwsUgGBNnsbMMATIcM75rWi56S3OsRTqIBNudc";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+function escapeHtml(str){
+  return String(str == null ? "" : str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+function showApp(user){
+  document.getElementById("loginScreen").style.display = "none";
+  document.getElementById("appRoot").style.display = "";
+  document.getElementById("authBar").innerHTML =
+    `<span>Signed in as ${escapeHtml(user.email)}</span><button id="signOutBtn">Sign out</button>`;
+  document.getElementById("signOutBtn").addEventListener("click", async () => { await sb.auth.signOut(); });
+}
+function showLogin(){
+  document.getElementById("appRoot").style.display = "none";
+  document.getElementById("loginScreen").style.display = "flex";
+}
+
+let liveLibraryLoadedOnce = false;
+async function onSignedIn(user){
+  showApp(user);
+  if(liveLibraryLoadedOnce) return;
+  liveLibraryLoadedOnce = true;
+  await fetchAndRenderLiveLibrary("core");
+}
+sb.auth.getSession().then(({ data }) => {
+  if(data && data.session) onSignedIn(data.session.user);
+  else showLogin();
+});
+sb.auth.onAuthStateChange((event, session) => {
+  if(session && session.user) onSignedIn(session.user);
+  else { liveLibraryLoadedOnce = false; showLogin(); }
+});
+document.getElementById("loginSendBtn").addEventListener("click", async () => {
+  const email = document.getElementById("loginEmail").value.trim();
+  const msg = document.getElementById("loginMsg");
+  if(!email){ msg.className = "login-msg err"; msg.textContent = "Enter an email address first."; return; }
+  msg.className = "login-msg";
+  msg.textContent = "Sending…";
+  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.href } });
+  if(error){ msg.className = "login-msg err"; msg.textContent = "Could not send link: " + error.message; }
+  else { msg.className = "login-msg ok"; msg.textContent = "Check your email for a sign-in link."; }
+});
+
+// ---- Live library: fetch from Supabase, group by mode -> category ----
+const LIB_CATEGORY_ORDER = { core:["warmup","passing","tackling","attacking","possession","game"],
+                              teen:["warmup","passing","tackling","attacking","possession","game"],
+                              u89:["warmup","skillgame","teamgame"],
+                              u67:["warmup","skillgame","teamgame"] };
+const LIB_CATEGORY_LABEL = { warmup:"Warm-up", passing:"Passing & Striking", tackling:"Tackling & Contesting",
+                              attacking:"Attacking & Shooting", possession:"Possession & Pressing",
+                              game:"Finishing Game", skillgame:"Skill Game", teamgame:"Team Game" };
+let libraryRowsByMode = null; // cached full fetch, re-grouped per tab click
+
+function tagClassFor(code){
+  if(code === "hurling") return "tag-hurling";
+  if(code === "football") return "tag-football";
+  return "tag-both";
+}
+function tagLabelFor(code){
+  if(code === "hurling") return "Hurling";
+  if(code === "football") return "Football";
+  return "Both";
+}
+
+async function fetchAndRenderLiveLibrary(activeMode){
+  const container = document.getElementById("liveCategories");
+  if(!libraryRowsByMode){
+    container.innerHTML = '<p style="color:#6B6255; font-size:14px;">Loading…</p>';
+    try{
+      const { data, error } = await sb.from("drills").select("*").eq("is_deleted", false);
+      if(error) throw error;
+      libraryRowsByMode = { core:[], teen:[], u89:[], u67:[] };
+      (data || []).forEach(row => {
+        if(libraryRowsByMode[row.mode]) libraryRowsByMode[row.mode].push(row);
+      });
+    } catch(err){
+      container.innerHTML = '<div class="lib-banner err">Could not load the drill library (' +
+        escapeHtml(err.message || String(err)) +
+        '). Either Supabase is unreachable, or your email isn\'t on the coach list yet — ask Damien to add you to allowed_coaches.</div>';
+      return;
+    }
+  }
+  renderLiveLibraryMode(activeMode);
+}
+
+function renderLiveLibraryMode(activeMode){
+  const container = document.getElementById("liveCategories");
+  const rows = libraryRowsByMode[activeMode] || [];
+  if(rows.length === 0){
+    container.innerHTML = '<div class="lib-banner">No drills found for this mode yet.</div>';
+    return;
+  }
+  const byCat = {};
+  rows.forEach(r => { (byCat[r.category] = byCat[r.category] || []).push(r); });
+  const catOrder = LIB_CATEGORY_ORDER[activeMode] || Object.keys(byCat);
+  let html = "";
+  catOrder.forEach(cat => {
+    const list = byCat[cat];
+    if(!list || list.length === 0) return;
+    html += `<section class="category">
+      <div class="cat-head">
+        <h2>${escapeHtml(LIB_CATEGORY_LABEL[cat] || cat)}</h2>
+        <span class="cat-count">${list.length} drill${list.length === 1 ? "" : "s"}</span>
+      </div>
+      ${list.map(d => `
+        <div class="drill">
+          <div class="drill-main">
+            <p class="drill-name">${escapeHtml(d.name)}</p>
+            <p class="drill-desc">${escapeHtml(d.description)}</p>
+          </div>
+          <div class="drill-meta">
+            <span class="tag ${tagClassFor(d.code)}">${tagLabelFor(d.code)}</span>
+            ${d.age && d.age !== "both" ? `<span class="tag tag-u10">${escapeHtml(d.age.toUpperCase())}</span>` : ""}
+            <div class="meta-line">${d.duration_minutes} min &middot; ${d.min_players}+ players${d.source ? " &middot; Source: " + escapeHtml(d.source) : ""}</div>
+          </div>
+        </div>`).join("")}
+    </section>`;
+  });
+  container.innerHTML = html || '<div class="lib-banner">No drills found for this mode yet.</div>';
+}
+
+document.querySelectorAll("#libModeTabs .mode-tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#libModeTabs .mode-tab").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    fetchAndRenderLiveLibrary(btn.dataset.mode);
+  });
+});
+</script>
+</body>
+</html>
