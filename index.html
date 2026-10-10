@@ -1,0 +1,2434 @@
+<!DOCTYPE html>
+<!--
+  v21 changes:
+  - Added a Supabase email magic-link login gate (no sign-in, no app).
+  - Drill library (DB/TEEN_DB/YOUNG67_DB/YOUNG89_DB) is now fetched live from
+    Supabase's `drills` table after sign-in, instead of being embedded in this
+    file. If the fetch fails, the library stays empty and an error banner is
+    shown — it does not fall back to any stale embedded data.
+  - Added: per-drill ratings (1-5 + notes), collaborative add/edit of library
+    drills, save & share a built session via a link, and logging a session as
+    actually run (with a simple session-log viewer).
+  - IMPORTANT (human action needed): the Supabase project's Auth → URL
+    Configuration must include whatever URL this file ends up hosted at, or
+    magic-link sign-in will not redirect back correctly.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
+<title>Match Fit — GAA Session Builder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  :root{
+    --ink:#111111;
+    --paper:#FFFFFF;
+    --paper-2:#F0F0F0;
+    --pitch:#1A6B3F;
+    --pitch-light:#218F53;
+    --tan:#B0510F;
+    --tan-light:#D9701B;
+    --navy:#1E4C8A;
+    --u10:#7A3FA0;
+    --rule:#D0D0D0;
+    --text-2:#333333;
+    --text-3:#555555;
+    --warm:#5B6B4F;
+    --carraig-red:#A6362C;
+    --carraig-green:#1A6B3F;
+  }
+  html[data-theme="dark"]{
+    --ink:#F0EDE6;
+    --paper:#18181B;
+    --paper-2:#242428;
+    --pitch:#2FA562;
+    --pitch-light:#3FC078;
+    --tan:#D97730;
+    --tan-light:#E89152;
+    --navy:#3E72C4;
+    --u10:#9A5FC4;
+    --rule:#3A3A40;
+    --text-2:#D6D2C8;
+    --text-3:#AFAA9E;
+    --warm:#7C8A70;
+    --carraig-red:#D1584C;
+    --carraig-green:#2FA562;
+  }
+  *{box-sizing:border-box;}
+  html{ background:var(--paper); }
+  body{
+    margin:0;
+    min-height:100vh;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'IBM Plex Sans', sans-serif;
+    line-height:1.5;
+    transition:background 0.15s, color 0.15s;
+  }
+  .wrap{
+    max-width:640px;
+    margin:0 auto;
+    padding:24px 18px 60px;
+  }
+  header{
+    border-bottom:3px solid var(--ink);
+    padding-bottom:16px;
+    margin-bottom:20px;
+  }
+  .kicker{
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-weight:700;
+    font-size:13px;
+    color:var(--pitch);
+    margin:0 0 6px;
+  }
+  h1{
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-weight:700;
+    font-size:clamp(24px,6.5vw,32px);
+    margin:0 0 8px;
+    line-height:1.1;
+  }
+  .accent-stripe{
+    display:flex;
+    width:36px;
+    height:4px;
+    border-radius:2px;
+    overflow:hidden;
+    margin:0 0 10px;
+  }
+  .accent-stripe span{ flex:1; }
+  .accent-stripe span:first-child{ background:var(--carraig-green); }
+  .accent-stripe span:last-child{ background:var(--carraig-red); }
+  header p{
+    margin:0;
+    font-size:14.5px;
+    color:var(--text-2);
+    max-width:56ch;
+  }
+  .about-note{
+    margin-top:12px;
+  }
+  .about-note summary{
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-weight:600;
+    font-size:13px;
+    color:var(--pitch);
+    cursor:pointer;
+    list-style:none;
+  }
+  .about-note summary::-webkit-details-marker{ display:none; }
+  .about-note p{
+    font-size:13px;
+    color:var(--text-3);
+    max-width:60ch;
+    margin:8px 0 0;
+    line-height:1.55;
+  }
+
+  /* Controls */
+  .controls{ margin-bottom:20px; }
+  .control-group{ margin-bottom:14px; }
+  .control-label{
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-weight:600;
+    font-size:13px;
+    color:var(--text-3);
+    margin:0 0 6px;
+  }
+  .pill-row{
+    display:flex;
+    gap:6px;
+    flex-wrap:wrap;
+  }
+  .pill{
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-weight:600;
+    font-size:13px;
+    padding:8px 13px;
+    border-radius:20px;
+    border:2px solid var(--ink);
+    background:transparent;
+    color:var(--ink);
+    cursor:pointer;
+    transition:background 0.12s, color 0.12s;
+  }
+  .pill.active{
+    background:var(--ink);
+    color:var(--paper);
+  }
+  .pill:active{ transform: translateY(1px); }
+
+  .generate-btn{
+    width:100%;
+    margin-top:6px;
+    padding:14px;
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-weight:700;
+    font-size:16px;
+    background:var(--pitch);
+    color:#fff;
+    border:none;
+    border-radius:6px;
+    cursor:pointer;
+  }
+  .generate-btn:active{ background:var(--pitch-light); }
+  .generate-hint{
+    text-align:center;
+    font-size:12px;
+    color:var(--text-3);
+    margin:6px 0 0;
+  }
+
+  /* Output */
+  #output{ margin-top:26px; }
+  .empty-state{
+    text-align:center;
+    padding:36px 20px;
+    color:var(--text-3);
+    font-size:14px;
+    border:2px dashed var(--rule);
+    border-radius:8px;
+  }
+  .session-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    border-bottom:2px solid var(--ink);
+    padding-bottom:8px;
+    margin-bottom:4px;
+  }
+  .session-head h2{
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-weight:700;
+    font-size:20px;
+    margin:0;
+  }
+  .session-total{
+    font-size:13px;
+    color:var(--text-3);
+    font-weight:500;
+    white-space:nowrap;
+  }
+  .timeline{
+    display:flex;
+    width:100%;
+    height:14px;
+    border-radius:3px;
+    overflow:hidden;
+    border:1.5px solid var(--ink);
+    margin:10px 0 20px;
+  }
+  .tl-seg{ height:100%; }
+  .tl-warm{ background:var(--warm); }
+  .tl-pass{ background:var(--tan); }
+  .tl-tackle{ background:var(--navy); }
+  .tl-attack{ background:var(--tan-light); }
+  .tl-poss{ background:var(--u10); }
+  .tl-game{ background:var(--pitch); }
+
+  .slot{
+    padding:14px 0;
+    border-bottom:1px solid var(--rule);
+  }
+  .slot:last-child{ border-bottom:none; }
+  .slot-top{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:8px;
+  }
+  .slot-label{
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-weight:700;
+    font-size:11.5px;
+    letter-spacing:0.02em;
+    color:var(--text-3);
+    margin:0 0 4px;
+    flex:1;
+    min-width:0;
+  }
+  .order-btns{
+    display:flex;
+    gap:4px;
+    flex-shrink:0;
+  }
+  .order-btn{
+    width:40px;
+    height:40px;
+    border-radius:6px;
+    border:1.5px solid var(--rule);
+    background:none;
+    color:var(--text-3);
+    font-size:15px;
+    line-height:1;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .order-btn:disabled{ opacity:0.25; cursor:default; }
+  .order-btn:active:not(:disabled){ background:var(--paper-2); }
+  .order-btn[data-action="remove"]{
+    color:var(--carraig-red);
+    border-color:var(--carraig-red);
+  }
+  .order-btn[data-action="remove"]:active{ background:var(--carraig-red); color:#fff; }
+
+  .slot-name{
+    font-weight:600;
+    font-size:15.5px;
+    margin:0 0 4px;
+  }
+  .slot-desc{
+    font-size:13.5px;
+    color:var(--text-2);
+    margin:0 0 8px;
+  }
+  .slot-meta{
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:6px;
+  }
+  .tag{
+    display:inline-block;
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-weight:700;
+    font-size:10.5px;
+    padding:2px 7px;
+    border-radius:2px;
+    color:#fff;
+  }
+  .tag-hurling{ background:var(--pitch); }
+  .tag-football{ background:var(--navy); }
+  .tag-both{ background:var(--tan); }
+  .tag-u10{ background:var(--u10); }
+  .duration-tag{
+    font-size:12px;
+    color:var(--text-3);
+    font-weight:500;
+    margin-right:auto;
+  }
+  .players-tag{
+    font-size:12px;
+    color:var(--text-3);
+    font-weight:500;
+  }
+  .equipment-tag{
+    font-size:11.5px;
+    color:var(--text-3);
+    font-style:italic;
+  }
+  .players-input{
+    width:64px;
+    padding:6px 8px;
+    font-family:'IBM Plex Sans', sans-serif;
+    font-size:13px;
+    border:1.5px solid var(--ink);
+    border-radius:6px;
+    background:var(--paper);
+    color:var(--ink);
+  }
+  .trim-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-top:8px;
+    font-size:12px;
+    color:var(--text-3);
+  }
+  .trim-row input{
+    width:56px;
+    padding:5px 7px;
+    font-family:'IBM Plex Sans', sans-serif;
+    font-size:12.5px;
+    border:1.5px solid var(--rule);
+    border-radius:5px;
+    background:var(--paper);
+    color:var(--ink);
+  }
+  .trim-btn{
+    background:none;
+    border:1.5px solid var(--rule);
+    border-radius:5px;
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-size:11.5px;
+    font-weight:600;
+    color:var(--text-3);
+    padding:5px 9px;
+    cursor:pointer;
+  }
+  .trim-btn:active{ background:var(--paper-2); }
+  .trim-details{ margin:10px 0; }
+  .trim-details summary{
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-weight:600;
+    font-size:12.5px;
+    color:var(--text-3);
+    cursor:pointer;
+    list-style:none;
+  }
+  .trim-details summary::-webkit-details-marker{ display:none; }
+  .trim-result{
+    font-size:11.5px;
+    color:var(--text-3);
+    font-style:italic;
+  }
+  .filter-warning{
+    background:var(--paper-2);
+    border:1.5px solid var(--carraig-red);
+    border-radius:8px;
+    padding:10px 12px;
+    font-size:12.5px;
+    color:var(--text-2);
+    margin-bottom:12px;
+    line-height:1.5;
+  }
+
+  .slot-btn{
+    background:none;
+    border:1.5px solid var(--ink);
+    border-radius:4px;
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-size:11px;
+    font-weight:600;
+    color:var(--text-3);
+    padding:4px 9px;
+    cursor:pointer;
+  }
+  .slot-btn:active{ background:var(--paper-2); }
+
+  footer.note{
+    margin-top:24px;
+    padding-top:14px;
+    border-top:2px solid var(--ink);
+    font-size:12.5px;
+    color:var(--text-3);
+  }
+
+  /* Picker modal */
+  .modal-backdrop{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.5);
+    z-index:100;
+    align-items:flex-end;
+    justify-content:center;
+  }
+  .modal-backdrop.open{ display:flex; }
+  .modal-card{
+    background:var(--paper);
+    color:var(--ink);
+    width:100%;
+    max-width:640px;
+    max-height:78vh;
+    border-radius:14px 14px 0 0;
+    padding:16px 18px 24px;
+    overflow-y:auto;
+    border-top:3px solid var(--ink);
+  }
+  .modal-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:10px;
+  }
+  .modal-head h3{
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-weight:700;
+    font-size:17px;
+    margin:0;
+  }
+  .modal-close{
+    background:none;
+    border:1.5px solid var(--ink);
+    border-radius:16px;
+    width:30px;
+    height:30px;
+    font-size:16px;
+    color:var(--ink);
+    cursor:pointer;
+  }
+  .picker-item{
+    width:100%;
+    text-align:left;
+    background:none;
+    border:none;
+    border-bottom:1px solid var(--rule);
+    padding:12px 0;
+    cursor:pointer;
+    color:var(--ink);
+  }
+  .picker-item:active{ background:var(--paper-2); }
+  .picker-item .p-name{
+    font-weight:600;
+    font-size:14.5px;
+    margin:0 0 2px;
+  }
+  .picker-item .p-desc{
+    font-size:12.5px;
+    color:var(--text-3);
+    margin:0;
+  }
+
+  /* Diagrams */
+  .diagram-svg circle.dg-a{ fill:var(--pitch); }
+  .diagram-svg circle.dg-d{ fill:var(--tan); }
+  .diagram-svg circle.dg-c{ fill:var(--navy); }
+  .diagram-svg line.dg-line, .diagram-svg path.dg-line{ stroke:var(--ink); stroke-width:1.5; fill:none; }
+  .diagram-svg line.dg-line-soft{ stroke:var(--text-3); stroke-width:1.3; fill:none; }
+  .diagram-svg rect.dg-zone{ fill:none; stroke:var(--rule); stroke-width:1.5; stroke-dasharray:4 3; }
+  .diagram-svg text.dg-label{ font-family:'IBM Plex Sans', sans-serif; font-size:11px; fill:var(--text-3); }
+  .diagram-svg polygon.dg-cone{ fill:var(--paper-2); stroke:var(--ink); stroke-width:1.2; }
+  .diagram-caption{
+    font-size:12.5px;
+    color:var(--text-2);
+    margin:10px 0 0;
+    line-height:1.5;
+  }
+  .diagram-legend{
+    display:flex;
+    gap:16px;
+    flex-wrap:wrap;
+    margin-top:10px;
+  }
+  .diagram-legend span{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    font-size:12px;
+    color:var(--text-3);
+  }
+  .diagram-legend .dot{
+    width:10px;
+    height:10px;
+    border-radius:50%;
+    display:inline-block;
+  }
+  .dot-a{ background:var(--pitch); }
+  .dot-d{ background:var(--tan); }
+  .dot-c{ background:var(--navy); }
+  .diagram-legend .cone-ico{ display:inline-block; width:12px; height:12px; }
+
+  .export-option{
+    width:100%;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    text-align:left;
+    background:none;
+    border:1.5px solid var(--rule);
+    border-radius:8px;
+    padding:12px 14px;
+    margin-bottom:10px;
+    cursor:pointer;
+    color:var(--ink);
+  }
+  .export-option:active{ background:var(--paper-2); }
+  .export-option .eo-icon{ font-size:22px; flex-shrink:0; }
+  .export-option .eo-title{
+    display:block;
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-weight:700;
+    font-size:14.5px;
+  }
+  .export-option .eo-desc{
+    display:block;
+    font-size:12px;
+    color:var(--text-3);
+    margin-top:2px;
+  }
+
+  .add-drill-search{
+    width:100%;
+    padding:10px 12px;
+    font-family:'IBM Plex Sans', sans-serif;
+    font-size:14px;
+    border:1.5px solid var(--rule);
+    border-radius:8px;
+    background:var(--paper);
+    color:var(--ink);
+    margin-bottom:12px;
+  }
+  .custom-field{ margin-bottom:14px; }
+  .custom-field label{
+    display:block;
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-weight:600;
+    font-size:12.5px;
+    color:var(--text-3);
+    margin-bottom:5px;
+  }
+  .custom-field input,
+  .custom-field select,
+  .custom-field textarea{
+    width:100%;
+    padding:9px 11px;
+    font-family:'IBM Plex Sans', sans-serif;
+    font-size:14px;
+    border:1.5px solid var(--rule);
+    border-radius:7px;
+    background:var(--paper);
+    color:var(--ink);
+    resize:vertical;
+  }
+  .add-cat-details{
+    margin:0;
+  }
+  .add-cat-details + .add-cat-details{
+    margin-top:4px;
+  }
+  .add-cat-head{
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-weight:700;
+    font-size:13px;
+    color:var(--pitch);
+    text-transform:uppercase;
+    letter-spacing:0.02em;
+    padding:10px 2px;
+    border-bottom:1.5px solid var(--rule);
+    cursor:pointer;
+    list-style:none;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    user-select:none;
+  }
+  .add-cat-head::-webkit-details-marker{ display:none; }
+  .add-cat-head .chevron{
+    font-size:11px;
+    color:var(--text-3);
+    transition:transform 0.15s ease;
+    flex-shrink:0;
+  }
+  .add-cat-details[open] > .add-cat-head .chevron{ transform:rotate(90deg); }
+  .add-cat-count{ color:var(--text-3); font-weight:500; text-transform:none; letter-spacing:normal; }
+  .add-cat-body{ padding-top:2px; }
+  .add-drill-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    padding:10px 0;
+    border-bottom:1px solid var(--rule);
+  }
+  .add-drill-info{ flex:1; min-width:0; }
+  .add-drill-tags{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    margin-top:4px;
+    flex-wrap:wrap;
+  }
+  .add-drill-btn{
+    flex-shrink:0;
+    background:var(--pitch);
+    color:#fff;
+    border:none;
+    border-radius:6px;
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-weight:700;
+    font-size:12.5px;
+    padding:8px 12px;
+    cursor:pointer;
+  }
+  .add-drill-btn:disabled{ background:var(--rule); color:var(--text-3); }
+
+  /* ---- Auth / login gate ---- */
+  #loginScreen{
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px 18px;
+  }
+  .login-card{
+    width:100%;
+    max-width:380px;
+    border:2px solid var(--ink);
+    border-radius:10px;
+    padding:26px 22px;
+    background:var(--paper);
+  }
+  .login-card h1{ font-size:22px; margin:0 0 4px; }
+  .login-card p.login-sub{ font-size:13.5px; color:var(--text-3); margin:0 0 18px; }
+  .login-field{ margin-bottom:12px; }
+  .login-field label{
+    display:block;
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-weight:600;
+    font-size:12.5px;
+    color:var(--text-3);
+    margin-bottom:5px;
+  }
+  .login-field input{
+    width:100%;
+    padding:10px 12px;
+    font-size:14px;
+    border:1.5px solid var(--rule);
+    border-radius:7px;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'IBM Plex Sans', sans-serif;
+  }
+  .login-msg{ font-size:13px; margin:10px 0 0; }
+  .login-msg.ok{ color:var(--pitch); }
+  .login-msg.err{ color:var(--carraig-red); }
+  .authbar{
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    gap:8px;
+    font-size:11.5px;
+    color:var(--text-3);
+    margin-bottom:6px;
+  }
+  .authbar button{
+    background:none;
+    border:none;
+    color:var(--navy);
+    font-size:11.5px;
+    font-weight:600;
+    text-decoration:underline;
+    cursor:pointer;
+    padding:0;
+  }
+  .lib-banner{
+    border:1.5px dashed var(--rule);
+    border-radius:8px;
+    padding:12px 14px;
+    font-size:13px;
+    color:var(--text-3);
+    margin-bottom:16px;
+  }
+  .lib-banner.err{ border-color:var(--carraig-red); color:var(--carraig-red); }
+  .rating-row{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    margin-top:6px;
+    flex-wrap:wrap;
+  }
+  .rating-row .stars{ display:inline-flex; gap:2px; }
+  .rating-row .star-btn{
+    background:none;
+    border:none;
+    font-size:16px;
+    cursor:pointer;
+    padding:0;
+    line-height:1;
+    color:var(--rule);
+  }
+  .rating-row .star-btn.on{ color:var(--tan); }
+  .rating-avg{ font-size:11.5px; color:var(--text-3); }
+  .lib-btn{
+    background:none;
+    border:1.5px solid var(--rule);
+    border-radius:4px;
+    font-family:'IBM Plex Sans Condensed', sans-serif;
+    font-size:10.5px;
+    font-weight:600;
+    color:var(--text-3);
+    padding:4px 9px;
+    cursor:pointer;
+  }
+
+  @media (max-width:420px){
+    .slot-meta{ flex-wrap:wrap; }
+  }
+</style>
+</head>
+<body>
+
+<div id="loginScreen" style="display:none;">
+  <div class="login-card">
+    <h1>Sign in</h1>
+    <p class="login-sub">Match Fit is for Carrig GAA coaches only. Enter your email and we'll send you a sign-in link.</p>
+    <div class="login-field">
+      <label for="loginEmail">Email</label>
+      <input type="email" id="loginEmail" placeholder="you@example.com" autocomplete="email">
+    </div>
+    <button class="generate-btn" id="loginSendBtn">Send magic link</button>
+    <p class="login-msg" id="loginMsg"></p>
+  </div>
+</div>
+
+<div id="appRoot" style="display:none;">
+<div class="wrap">
+  <div class="authbar" id="authBar"></div>
+
+  <header>
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+      <p class="kicker">Match Fit — v21</p>
+      <button id="themeToggle" style="flex-shrink:0; font-family:'IBM Plex Sans Condensed', sans-serif; font-weight:600; font-size:12.5px; padding:6px 12px; border-radius:16px; border:1.5px solid var(--ink); background:var(--paper-2); color:var(--ink); cursor:pointer;">🌙 Dark</button>
+    </div>
+    <h1>Match Fit — GAA Session Builder (Underage)</h1>
+    <div class="accent-stripe"><span></span><span></span></div>
+    <p>Build a hurling or football training session for U6 through U18 in seconds — generate at random, hand-pick from the full library, then swap, reorder, filter by players and equipment on hand, or trim to a set length.</p>
+    <details class="about-note">
+      <summary>ℹ️ About this tool</summary>
+      <p id="aboutNoteBody">This started as TSheehan's own U10 and U11 training session plans — 135 drills catalogued across two full seasons of real sessions this team has actually run, 36 of them with a layout diagram. It now also carries U10 and U12 technique drills from the official GAA Fun Do Football and Hurling Coaching Classes resources (2007) — 177 more, covering catching, kicking, striking, tackling, evasion and blocking, plus the fun games and modified games that go with each skill — all 177 with a layout diagram traced from the resource's own illustrations. It also carries 38 hurling entries for ages 11–13 from the Kellogg's GAA Cúl Camps Hurling Resource (Leinster GAA) — 30 day-session drills and games and 8 wall-ball sessions, all with a diagram — placed here alongside the U10/U12 material since the source doesn't split ages finer than 11–13. 251 of 350 drills in this mode now have a diagram. Filter by U10/U11/U12 to narrow to a specific age. U16/18 content has its own mode now — see the 13-18 tab above.</p>
+    </details>
+  </header>
+
+  <div id="libBanner" class="lib-banner">Loading drill library…</div>
+
+  <div class="controls">
+    <div class="control-group" id="libActionsGroup" style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="lib-btn" id="addLibDrillBtn">➕ Add a drill to the library</button>
+      <button class="lib-btn" id="viewLogBtn">📊 View session log</button>
+    </div>
+    <div class="control-group">
+      <p class="control-label">Age range</p>
+      <div class="pill-row" id="modeRow">
+        <button class="pill" data-value="u67">U6 / U7 (games session)</button>
+        <button class="pill" data-value="u89">U8 / U9 (skill session)</button>
+        <button class="pill active" data-value="core">U10 / U11 / U12 (full builder)</button>
+        <button class="pill" data-value="teen">13-18 (teen builder)</button>
+      </div>
+    </div>
+    <div class="control-group">
+      <p class="control-label">Code</p>
+      <div class="pill-row" id="codeRow">
+        <button class="pill active" data-value="both">Either</button>
+        <button class="pill" data-value="hurling">Hurling</button>
+        <button class="pill" data-value="football">Football</button>
+      </div>
+    </div>
+    <div class="control-group">
+      <p class="control-label">Age group</p>
+      <div class="pill-row" id="ageRow">
+        <button class="pill active" data-value="both">Either</button>
+        <button class="pill" data-value="u10">U10</button>
+        <button class="pill" data-value="u11">U11</button>
+        <button class="pill" data-value="u12">U12</button>
+      </div>
+    </div>
+    <div class="control-group" id="playersGroup">
+      <p class="control-label">Players today (optional — excludes drills needing more)</p>
+      <input type="number" id="playersInput" class="players-input" placeholder="Any" min="1">
+    </div>
+    <div class="control-group" id="themeGroup">
+      <p class="control-label">Theme (optional focus)</p>
+      <div class="pill-row" id="themeRow"></div>
+    </div>
+    <button class="generate-btn" id="genBtn">Generate</button>
+    <p class="generate-hint" id="generateHint">Aims for 55–65 minutes — adjust anytime once it's built.</p>
+  </div>
+
+  <div id="output">
+    <div class="empty-state">Hit Generate for a ready-made session, or build your own below.</div>
+  </div>
+
+  <footer class="note">
+    U10/U11/U12 mode: 350 drills — 135 from the team's own session library (source: TSheehan, U10/U11 only, 36 with a diagram), 177 U10/U12 technique drills and games from the official GAA Fun Do Football and Hurling Coaching Classes resources (2007, all with a diagram), and 38 hurling entries for ages 11–13 from the Kellogg's GAA Cúl Camps Hurling Resource (Leinster GAA — 30 day-session drills/games plus 8 wall-ball sessions, all with a diagram, placed here since the source doesn't split ages finer than 11–13) — 251 of 350 drills in this mode have a diagram. Generate builds a session at random and auto-fits it to 55–65 minutes; every block can be swapped, reordered, edited, or removed, and you can hand-pick from the library or add a fully custom drill at any time. Filter by code, age, or players on hand.<br>
+    13-18 mode: 46 drills/games (football-only, 43 with a diagram) — split out into its own mode so it's no longer mixed in with the U10/U11/U12 pool. 16 from Cavan GAA's Coaching & Games resource, plus 30 from a Philip Kerr (2004) football coaching manual (warm-ups, speed/agility, passing and evasion, tackling technique, shooting drills and tactical games for older players — 27 of the 30 with a diagram traced from the manual's own layouts). Same full-builder mechanics as U10/U11/U12 (55–65 min target, swap/reorder/edit/remove/add), and now has entries in every category including warm-up and possession.<br>
+    U8/U9 mode: 294 drills — 131 from the club's own weekly session archive, 45 from the Monaghan Drills reference pack (football-only, with diagrams), 88 more from the U8 sections of the GAA Fun Do Coaching Classes resources (also all with diagrams), and 30 hurling drills and games for ages 8–10 from the Kellogg's GAA Cúl Camps Hurling Resource (all with a diagram) — 137 of 294 drills in this mode have a diagram. U6/U7 mode: 336 drills — 110 from the club's own weekly session archive, 196 fundamental-movement and ball-skill exercises from the GAA Fun Do Nursery Programme (16 with a diagram), and 30 hurling drills and games for ages 6–7 from the Kellogg's GAA Cúl Camps Hurling Resource (all with a diagram) — 46 of 336 drills in this mode have a diagram. Both younger modes are skills/games-led (warm-up → skill games → team games). None of the externally-sourced drills have been reviewed line-by-line the way the U10/U11 club library was — see Data Notes in the library for how each batch was extracted. Diagrams for the Coaching Classes, Monaghan, Nursery and Cúl Camps entries were traced from the real layouts in the source resources, not invented from the text alone. Same swap/reorder/edit/remove/add tools in all four modes, but only U10/U11/U12 and 13-18 modes have a fixed duration target — sessions vary more at younger ages.
+  </footer>
+
+</div>
+
+<div class="modal-backdrop" id="pickerBackdrop">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3 id="pickerTitle">Choose a drill</h3>
+      <button class="modal-close" id="pickerClose">✕</button>
+    </div>
+    <div id="pickerList"></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="diagramBackdrop">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3 id="diagramTitle">Diagram</h3>
+      <button class="modal-close" id="diagramClose">✕</button>
+    </div>
+    <div id="diagramBody"></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="exportBackdrop">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3>Share session</h3>
+      <button class="modal-close" id="exportClose">✕</button>
+    </div>
+    <button class="export-option" id="exportTextBtn">
+      <span class="eo-icon">📋</span>
+      <span>
+        <span class="eo-title">Copy as text</span>
+        <span class="eo-desc">Plain text — paste straight into WhatsApp, email, or notes</span>
+      </span>
+    </button>
+    <button class="export-option" id="exportHtmlBtn">
+      <span class="eo-icon">⬇️</span>
+      <span>
+        <span class="eo-title">Download as HTML</span>
+        <span class="eo-desc">Formatted file with diagrams — share it as a document</span>
+      </span>
+    </button>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="addDrillBackdrop">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3>Add a drill</h3>
+      <button class="modal-close" id="addDrillClose">✕</button>
+    </div>
+    <input type="text" id="addDrillSearch" class="add-drill-search" placeholder="Search by name or description…">
+    <div id="addDrillList"></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="customDrillBackdrop">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3>Add a custom drill</h3>
+      <button class="modal-close" id="customDrillClose">✕</button>
+    </div>
+    <p style="font-size:12.5px; color:var(--text-3); margin:-6px 0 14px;">One-off — just for this session, not saved to the library.</p>
+    <div class="custom-field">
+      <label for="customDrillName">Drill name</label>
+      <input type="text" id="customDrillName" placeholder="e.g. Coach's own warm-up game">
+    </div>
+    <div class="custom-field">
+      <label for="customDrillCat">Category</label>
+      <select id="customDrillCat">
+        <option value="warmup">Warm-up</option>
+        <option value="passing">Passing &amp; Striking</option>
+        <option value="tackling">Tackling &amp; Contesting</option>
+        <option value="attacking">Attacking &amp; Shooting</option>
+        <option value="possession">Possession &amp; Pressing</option>
+        <option value="game">Finishing Game</option>
+      </select>
+    </div>
+    <div class="custom-field">
+      <label for="customDrillDur">Duration (minutes)</label>
+      <input type="number" id="customDrillDur" min="1" placeholder="10">
+    </div>
+    <div class="custom-field">
+      <label for="customDrillNotes">Notes (optional)</label>
+      <textarea id="customDrillNotes" rows="3" placeholder="Any setup, coaching points, or instructions…"></textarea>
+    </div>
+    <p id="customDrillError" style="color:var(--carraig-red); font-size:12.5px; margin:0 0 10px; display:none;">Please enter a drill name and a duration.</p>
+    <button class="generate-btn" id="customDrillSubmit">Add to session</button>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="editDrillBackdrop">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3 id="editDrillTitle">Edit drill</h3>
+      <button class="modal-close" id="editDrillClose">✕</button>
+    </div>
+    <p style="font-size:12.5px; color:var(--text-3); margin:-6px 0 14px;">Adjusts this block for this session only — the library drill itself isn't changed.</p>
+    <div class="custom-field">
+      <label for="editDrillDur">Duration (minutes)</label>
+      <input type="number" id="editDrillDur" min="1">
+    </div>
+    <div class="custom-field">
+      <label for="editDrillNotes">Notes / description</label>
+      <textarea id="editDrillNotes" rows="4"></textarea>
+    </div>
+    <p id="editDrillError" style="color:var(--carraig-red); font-size:12.5px; margin:0 0 10px; display:none;">Please enter a valid duration.</p>
+    <button class="generate-btn" id="editDrillSubmit">Save changes</button>
+  </div>
+</div>
+
+<!-- Rate drill -->
+<div class="modal-backdrop" id="rateDrillBackdrop">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3 id="rateDrillTitle">Rate this drill</h3>
+      <button class="modal-close" id="rateDrillClose">✕</button>
+    </div>
+    <div class="rating-row" style="margin-bottom:10px;">
+      <div class="stars" id="rateStars">
+        <button class="star-btn" data-v="1">★</button>
+        <button class="star-btn" data-v="2">★</button>
+        <button class="star-btn" data-v="3">★</button>
+        <button class="star-btn" data-v="4">★</button>
+        <button class="star-btn" data-v="5">★</button>
+      </div>
+    </div>
+    <div class="custom-field">
+      <label for="rateDrillNotes">Notes (optional)</label>
+      <textarea id="rateDrillNotes" rows="3" placeholder="How did it go?"></textarea>
+    </div>
+    <p id="rateDrillError" style="color:var(--carraig-red); font-size:12.5px; margin:0 0 10px; display:none;">Pick a star rating first.</p>
+    <button class="generate-btn" id="rateDrillSubmit">Submit rating</button>
+  </div>
+</div>
+
+<!-- Edit / Add library drill (writes to Supabase, shared by every coach) -->
+<div class="modal-backdrop" id="libDrillBackdrop">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3 id="libDrillTitle">Edit library drill</h3>
+      <button class="modal-close" id="libDrillClose">✕</button>
+    </div>
+    <p style="font-size:12.5px; color:var(--text-3); margin:-6px 0 14px;">This changes the shared library for every coach.</p>
+    <div class="custom-field">
+      <label for="libDrillMode">Age mode</label>
+      <select id="libDrillMode">
+        <option value="core">U10 / U11 / U12</option>
+        <option value="teen">13-18</option>
+        <option value="u89">U8 / U9</option>
+        <option value="u67">U6 / U7</option>
+      </select>
+    </div>
+    <div class="custom-field">
+      <label for="libDrillCat">Category</label>
+      <select id="libDrillCat"></select>
+    </div>
+    <div class="custom-field">
+      <label for="libDrillName">Name</label>
+      <input type="text" id="libDrillName">
+    </div>
+    <div class="custom-field">
+      <label for="libDrillDesc">Description</label>
+      <textarea id="libDrillDesc" rows="3"></textarea>
+    </div>
+    <div class="custom-field">
+      <label for="libDrillCode">Code</label>
+      <select id="libDrillCode">
+        <option value="both">Both</option>
+        <option value="hurling">Hurling</option>
+        <option value="football">Football</option>
+      </select>
+    </div>
+    <div class="custom-field">
+      <label for="libDrillAge">Age</label>
+      <input type="text" id="libDrillAge" placeholder="e.g. both, u10, u11, u12">
+    </div>
+    <div class="custom-field">
+      <label for="libDrillDur">Duration (minutes)</label>
+      <input type="number" id="libDrillDur" min="1">
+    </div>
+    <div class="custom-field">
+      <label for="libDrillTheme">Theme tags (comma separated)</label>
+      <input type="text" id="libDrillTheme" placeholder="e.g. handpass, catching">
+    </div>
+    <div class="custom-field">
+      <label for="libDrillMinPlayers">Minimum players</label>
+      <input type="number" id="libDrillMinPlayers" min="1">
+    </div>
+    <div class="custom-field">
+      <label for="libDrillEquipment">Equipment (comma separated)</label>
+      <input type="text" id="libDrillEquipment" placeholder="e.g. cones, bibs">
+    </div>
+    <div class="custom-field">
+      <label for="libDrillDiagram">Diagram HTML (optional)</label>
+      <textarea id="libDrillDiagram" rows="3" placeholder="Paste diagram markup, or leave blank"></textarea>
+    </div>
+    <p id="libDrillError" style="color:var(--carraig-red); font-size:12.5px; margin:0 0 10px; display:none;">Please fill in a name, description, age and duration.</p>
+    <button class="generate-btn" id="libDrillSubmit">Save to library</button>
+  </div>
+</div>
+
+<!-- Save & share session -->
+<div class="modal-backdrop" id="shareBackdrop">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3>Save &amp; share this session</h3>
+      <button class="modal-close" id="shareClose">✕</button>
+    </div>
+    <div class="custom-field">
+      <label for="shareTitle">Session title</label>
+      <input type="text" id="shareTitle">
+    </div>
+    <button class="generate-btn" id="shareSubmit">Save &amp; get link</button>
+    <div id="shareResult" style="margin-top:14px; display:none;">
+      <p style="font-size:12.5px; color:var(--text-3); margin:0 0 6px;">Share this link:</p>
+      <input type="text" id="shareLinkInput" readonly style="width:100%; padding:9px 11px; font-size:13px; border:1.5px solid var(--rule); border-radius:7px; background:var(--paper-2); color:var(--ink); margin-bottom:8px;">
+      <button class="slot-btn" id="shareCopyBtn" style="width:100%; padding:10px;">📋 Copy link</button>
+    </div>
+  </div>
+</div>
+
+<!-- Log session as run -->
+<div class="modal-backdrop" id="logRunBackdrop">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3>Log this as run</h3>
+      <button class="modal-close" id="logRunClose">✕</button>
+    </div>
+    <div class="custom-field">
+      <label for="logRunDate">Date</label>
+      <input type="date" id="logRunDate">
+    </div>
+    <div class="custom-field">
+      <label for="logRunCoach">Coach name</label>
+      <input type="text" id="logRunCoach">
+    </div>
+    <div class="custom-field">
+      <label for="logRunAttendance">Attendance</label>
+      <input type="number" id="logRunAttendance" min="0">
+    </div>
+    <div class="custom-field">
+      <label for="logRunNotes">Notes (optional)</label>
+      <textarea id="logRunNotes" rows="3"></textarea>
+    </div>
+    <p id="logRunError" style="color:var(--carraig-red); font-size:12.5px; margin:0 0 10px; display:none;">Please enter a coach name.</p>
+    <button class="generate-btn" id="logRunSubmit">Log session</button>
+  </div>
+</div>
+
+<!-- View session log -->
+<div class="modal-backdrop" id="viewLogBackdrop">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3>Session log</h3>
+      <button class="modal-close" id="viewLogClose">✕</button>
+    </div>
+    <div id="viewLogList"><p style="color:var(--text-3); font-size:13.5px;">Loading…</p></div>
+  </div>
+</div>
+
+</div><!-- /#appRoot -->
+
+<script>
+// ---- Data ----
+// code: 'hurling' | 'football' | 'both'
+// age:  'u10' | 'u11' | 'both'
+// theme: array of tags, e.g. ['handpass'], ['shooting'], ['solo']
+const DB = { warmup:[], passing:[], tackling:[], attacking:[], possession:[], game:[] };
+const TEEN_DB = { warmup:[], passing:[], tackling:[], attacking:[], possession:[], game:[] };
+const YOUNG67_DB = { warmup:[], skillgame:[], teamgame:[] };
+const YOUNG89_DB = { warmup:[], skillgame:[], teamgame:[] };
+
+const YOUNG_SLOT_META = {
+  warmup:    {label:"Warm-up",    tl:"tl-warm"},
+  skillgame: {label:"Skill Game", tl:"tl-pass"},
+  teamgame:  {label:"Team Game",  tl:"tl-game"}
+};
+const YOUNG_CATEGORY_ORDER = ["warmup","skillgame","teamgame"];
+// U8/U9: skills-led — more individual technique work, still finishes on team games.
+const YOUNG89_BUILD_PLAN = ["warmup","skillgame","skillgame","skillgame","teamgame","teamgame"];
+// U6/U7: games-led — a short warm-up then mostly named games, one skill game mixed in.
+const YOUNG67_BUILD_PLAN = ["warmup","skillgame","teamgame","teamgame","teamgame"];
+
+const SLOT_META = {
+  warmup:      {label:"Warm-up",                    tl:"tl-warm"},
+  passing:     {label:"Passing & Striking",         tl:"tl-pass"},
+  tackling:    {label:"Tackling & Contesting",      tl:"tl-tackle"},
+  attacking:   {label:"Attacking & Shooting",       tl:"tl-attack"},
+  possession:  {label:"Possession & Pressing",      tl:"tl-poss"},
+  game:        {label:"Finishing Game",             tl:"tl-game"}
+};
+const CATEGORY_ORDER = ["warmup","passing","tackling","attacking","possession","game"];
+
+const THEMES = [
+  {value:"any",       label:"Any"},
+  {value:"handpass",  label:"Hand Passing"},
+  {value:"kicking",   label:"Kicking"},
+  {value:"striking",  label:"Striking"},
+  {value:"solo",      label:"Soloing"},
+  {value:"shooting",  label:"Shooting"},
+  {value:"tackling",  label:"Tackling"},
+  {value:"catching",  label:"Catching"},
+  {value:"possession",label:"Possession"}
+];
+
+// ---- State ----
+let mode = "core"; // "core" (U10/U11/U12 full builder) | "teen" (13-18 full builder) | "u89" (U8/U9 skill session) | "u67" (U6/U7 games session)
+let state = { code:"both", age:"both", theme:"any", players:null };
+let sessionSlots = [];   // array of {id, cat, drill} — order in this array IS display order
+let trimTarget = "";     // remembers the typed target-duration value across re-renders
+let lastSkippedCategories = []; // categories that had no matching drill on the last Generate
+let trimResultMsg = "";  // feedback shown after Trim to fit runs
+let nextSlotId = 1;
+function freshId(){ return "slot-" + (nextSlotId++); }
+
+function activeDB(){
+  if(mode === "u89") return YOUNG89_DB;
+  if(mode === "u67") return YOUNG67_DB;
+  if(mode === "teen") return TEEN_DB;
+  return DB;
+}
+function activeCatOrder(){ return (mode === "core" || mode === "teen") ? CATEGORY_ORDER : YOUNG_CATEGORY_ORDER; }
+function activeSlotMeta(){ return (mode === "core" || mode === "teen") ? SLOT_META : YOUNG_SLOT_META; }
+function libCount(){ return Object.values(activeDB()).reduce((sum, arr) => sum + arr.length, 0); }
+
+function matches(drill, filterCode, filterAge, filterPlayers){
+  const codeOk = filterCode === "both" || drill.code === "both" || drill.code === filterCode;
+  const ageOk  = filterAge === "both" || drill.age === "both" || drill.age === filterAge;
+  const playersOk = !filterPlayers || drill.minPlayers <= filterPlayers;
+  return codeOk && ageOk && playersOk;
+}
+
+function pickFrom(pool, avoidName, useTheme){
+  let filtered = pool.filter(d => matches(d, state.code, state.age, state.players));
+  if(filtered.length === 0) return null;
+
+  if(useTheme && state.theme !== "any"){
+    const themed = filtered.filter(d => d.theme && d.theme.includes(state.theme));
+    if(themed.length > 0) filtered = themed;
+  }
+
+  let candidates = filtered.filter(d => d.name !== avoidName);
+  if(candidates.length === 0) candidates = filtered;
+  return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
+function tagClass(code){
+  if(code === "hurling") return "tag-hurling";
+  if(code === "football") return "tag-football";
+  return "tag-both";
+}
+function tagLabel(code){
+  if(code === "hurling") return "Hurling";
+  if(code === "football") return "Football";
+  return "Both codes";
+}
+
+function playerEquipTags(drill){
+  let out = `<span class="players-tag">👥 ${drill.minPlayers}+</span>`;
+  if(drill.equipment && drill.equipment.length){
+    out += `<span class="equipment-tag">${drill.equipment.join(", ")}</span>`;
+  }
+  return out;
+}
+
+function buildSession(){
+  if(mode === "u89" || mode === "u67"){ buildYoungSession(); return; }
+  const slots = [];
+  const skipped = [];
+  ["warmup","passing","tackling","attacking"].forEach(cat => {
+    const drill = pickFrom(activeDB()[cat], null, true);
+    if(drill) slots.push({ id: freshId(), cat, drill });
+    else skipped.push(cat);
+  });
+
+  const wantPossession = state.theme === "possession" ? true : Math.random() < 0.45;
+  if(wantPossession){
+    const poss = pickFrom(activeDB().possession, null, true);
+    if(poss) slots.push({ id: freshId(), cat: "possession", drill: poss });
+  }
+
+  const gameDrill = pickFrom(activeDB().game, null, true);
+  if(gameDrill) slots.push({ id: freshId(), cat: "game", drill: gameDrill });
+  else skipped.push("game");
+
+  sessionSlots = slots;
+  lastSkippedCategories = skipped;
+  fitSessionToRange(55, 65); // Generate always aims to land at 60 min, give or take 5
+  render();
+}
+
+// Simple session builder for U6-U9: no strict duration target, just a sensible
+// mix — 1 warm-up, 3 skill games, 2 team games — from the young-age library.
+function buildYoungSession(){
+  const db = activeDB();
+  const plan = mode === "u67" ? YOUNG67_BUILD_PLAN : YOUNG89_BUILD_PLAN;
+  const slots = [];
+  const skipped = [];
+  const usedNames = [];
+  plan.forEach(cat => {
+    const pool = db[cat].filter(d => !usedNames.includes(d.name));
+    const drill = pickFrom(pool.length ? pool : db[cat], null, false);
+    if(drill){ slots.push({ id: freshId(), cat, drill }); usedNames.push(drill.name); }
+    else if(!skipped.includes(cat)) skipped.push(cat);
+  });
+  sessionSlots = slots;
+  lastSkippedCategories = skipped;
+  trimResultMsg = "";
+  render();
+}
+
+function findSlot(id){
+  return sessionSlots.find(s => s.id === id);
+}
+
+function rerollSlot(id){
+  const slot = findSlot(id);
+  if(!slot) return;
+  const picked = pickFrom(activeDB()[slot.cat], slot.drill.name, true);
+  if(picked){
+    slot.drill = picked;
+    lastSkippedCategories = []; trimResultMsg = "";
+    render();
+  }
+}
+
+function moveSlot(id, dir){
+  const idx = sessionSlots.findIndex(s => s.id === id);
+  const newIdx = idx + dir;
+  if(idx === -1 || newIdx < 0 || newIdx >= sessionSlots.length) return;
+  [sessionSlots[idx], sessionSlots[newIdx]] = [sessionSlots[newIdx], sessionSlots[idx]];
+  render();
+}
+
+function removeSlot(id){
+  sessionSlots = sessionSlots.filter(s => s.id !== id);
+  lastSkippedCategories = []; trimResultMsg = "";
+  render();
+}
+
+function addDrillToSession(cat, name){
+  const drill = activeDB()[cat].find(d => d.name === name);
+  if(!drill) return;
+  sessionSlots.push({ id: freshId(), cat, drill });
+  lastSkippedCategories = []; trimResultMsg = "";
+  render();
+}
+
+// ---- Shared duration-fitting logic ----
+// Shrinks/grows sessionSlots (in place) so the total lands within [minTarget, maxTarget].
+// Over max: shrinks the longest slot (swaps for a shorter alternative in the same category
+// if one exists, otherwise drops the slot). Under min: adds short drills that fit the gap.
+function fitSessionToRange(minTarget, maxTarget){
+  let total = sessionSlots.reduce((sum, s) => sum + s.drill.dur, 0);
+  let guard = 0;
+
+  while(total > maxTarget && sessionSlots.length > 1 && guard < 30){
+    guard++;
+    let maxIdx = 0;
+    sessionSlots.forEach((s, i) => { if(s.drill.dur > sessionSlots[maxIdx].drill.dur) maxIdx = i; });
+    const slot = sessionSlots[maxIdx];
+    const pool = activeDB()[slot.cat]
+      .filter(d => matches(d, state.code, state.age, state.players) && d.dur < slot.drill.dur)
+      .sort((a, b) => a.dur - b.dur);
+    if(pool.length > 0){
+      total = total - slot.drill.dur + pool[0].dur;
+      slot.drill = pool[0];
+    } else {
+      total -= slot.drill.dur;
+      sessionSlots.splice(maxIdx, 1);
+    }
+  }
+
+  guard = 0;
+  while(total < minTarget && guard < 15){
+    guard++;
+    const gap = maxTarget - total;
+    let candidates = [];
+    activeCatOrder().forEach(cat => {
+      activeDB()[cat]
+        .filter(d => matches(d, state.code, state.age, state.players) && d.dur <= gap)
+        .forEach(d => candidates.push({ cat, drill: d }));
+    });
+    if(candidates.length === 0) break;
+    const pick = candidates[Math.floor(Math.random() * candidates.length)];
+    sessionSlots.push({ id: freshId(), cat: pick.cat, drill: pick.drill });
+    total += pick.drill.dur;
+  }
+
+  return total;
+}
+
+// ---- Trim to fit (low-key duration-budget helper, manual target) ----
+function trimToFit(){
+  const target = parseInt(trimTarget, 10);
+  if(!target || target < 10 || sessionSlots.length === 0) return;
+  const finalTotal = fitSessionToRange(target, target);
+  trimResultMsg = finalTotal === target ? "✅ Fit exactly" : `Closest we could get: ${finalTotal} min`;
+  render();
+}
+
+// ---- Picker modal (replace this specific slot's drill, same category) ----
+function openPicker(id){
+  const slot = findSlot(id);
+  if(!slot) return;
+  const meta = activeSlotMeta()[slot.cat];
+  document.getElementById("pickerTitle").textContent = "Choose: " + meta.label;
+  const pool = activeDB()[slot.cat].filter(d => matches(d, state.code, state.age, state.players));
+  const list = document.getElementById("pickerList");
+  if(pool.length === 0){
+    list.innerHTML = '<p style="color:var(--text-3); font-size:13.5px;">No drills match the current Code/Age filters for this category.</p>';
+  } else {
+    list.innerHTML = pool.map(d => `
+      <button class="picker-item" data-id="${id}" data-name="${d.name.replace(/"/g,'&quot;')}">
+        <p class="p-name">${escapeHtml(d.name)}</p>
+        <p class="p-desc">${escapeHtml(d.desc)}</p>
+        <div class="add-drill-tags" style="margin-top:4px;">
+          <span class="duration-tag">${d.dur} min</span>
+          ${playerEquipTags(d)}
+        </div>
+      </button>
+    `).join("");
+  }
+  document.getElementById("pickerBackdrop").classList.add("open");
+
+  list.querySelectorAll(".picker-item").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const targetSlot = findSlot(btn.dataset.id);
+      const drill = activeDB()[targetSlot.cat].find(d => d.name === btn.dataset.name);
+      if(drill){
+        targetSlot.drill = drill;
+        lastSkippedCategories = []; trimResultMsg = "";
+        closePicker();
+        render();
+      }
+    });
+  });
+}
+function closePicker(){
+  document.getElementById("pickerBackdrop").classList.remove("open");
+}
+document.getElementById("pickerClose").addEventListener("click", closePicker);
+document.getElementById("pickerBackdrop").addEventListener("click", (e) => {
+  if(e.target.id === "pickerBackdrop") closePicker();
+});
+
+// ---- Diagram modal ----
+function openDiagram(id){
+  const slot = findSlot(id);
+  if(!slot || !slot.drill.diagram) return;
+  document.getElementById("diagramTitle").textContent = slot.drill.name;
+  document.getElementById("diagramBody").innerHTML =
+    slot.drill.diagram + `<p class="diagram-caption">${slot.drill.desc}</p>`;
+  document.getElementById("diagramBackdrop").classList.add("open");
+}
+function closeDiagram(){
+  document.getElementById("diagramBackdrop").classList.remove("open");
+}
+document.getElementById("diagramClose").addEventListener("click", closeDiagram);
+document.getElementById("diagramBackdrop").addEventListener("click", (e) => {
+  if(e.target.id === "diagramBackdrop") closeDiagram();
+});
+
+// ---- Add-drill modal (browse the full library, append to session) ----
+let openAddCategories = new Set(); // tracks which category accordions are manually opened
+
+function renderAddDrillList(){
+  const searchTerm = (document.getElementById("addDrillSearch").value || "").toLowerCase().trim();
+  const list = document.getElementById("addDrillList");
+  let html = "";
+  activeCatOrder().forEach(cat => {
+    const pool = activeDB()[cat].filter(d => matches(d, state.code, state.age, state.players));
+    const filtered = searchTerm
+      ? pool.filter(d => d.name.toLowerCase().includes(searchTerm) || d.desc.toLowerCase().includes(searchTerm))
+      : pool;
+    if(filtered.length === 0) return;
+
+    // auto-expand a category while searching (so matches are visible without an extra tap),
+    // otherwise respect whatever the user has manually toggled open
+    const isOpen = searchTerm.length > 0 || openAddCategories.has(cat);
+
+    let rows = "";
+    filtered.forEach(d => {
+      rows += `
+        <div class="add-drill-row">
+          <div class="add-drill-info">
+            <p class="p-name">${escapeHtml(d.name)}</p>
+            <p class="p-desc">${escapeHtml(d.desc)}</p>
+            <div class="add-drill-tags">
+              <span class="tag ${tagClass(d.code)}">${tagLabel(d.code)}</span>
+              ${d.age !== "both" ? `<span class="tag tag-u10">${d.age.toUpperCase()}</span>` : ""}
+              <span class="duration-tag">${d.dur} min</span>
+              ${playerEquipTags(d)}
+            </div>
+          </div>
+          <button class="add-drill-btn" data-cat="${cat}" data-name="${d.name.replace(/"/g,'&quot;')}">+ Add</button>
+        </div>`;
+    });
+
+    html += `
+      <details class="add-cat-details" data-cat="${cat}" ${isOpen ? "open" : ""}>
+        <summary class="add-cat-head">
+          <span>${activeSlotMeta()[cat].label} <span class="add-cat-count">(${filtered.length})</span></span>
+          <span class="chevron">&#9656;</span>
+        </summary>
+        <div class="add-cat-body">${rows}</div>
+      </details>`;
+  });
+  if(!html){
+    html = '<p style="color:var(--text-3); font-size:13.5px; padding:12px 0;">No drills match your search / current Code &amp; Age filters.</p>';
+  }
+  list.innerHTML = html;
+
+  list.querySelectorAll(".add-cat-details").forEach(el => {
+    el.addEventListener("toggle", () => {
+      if(el.open) openAddCategories.add(el.dataset.cat);
+      else openAddCategories.delete(el.dataset.cat);
+    });
+  });
+
+  list.querySelectorAll(".add-drill-btn").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      addDrillToSession(btn.dataset.cat, btn.dataset.name);
+      const original = btn.textContent;
+      btn.textContent = "✓ Added";
+      btn.disabled = true;
+      setTimeout(() => { btn.textContent = original; btn.disabled = false; }, 1000);
+    });
+  });
+}
+function openAddDrill(){
+  document.getElementById("addDrillSearch").value = "";
+  openAddCategories = new Set(); // all categories start collapsed each time the modal opens
+  renderAddDrillList();
+  document.getElementById("addDrillBackdrop").classList.add("open");
+}
+function closeAddDrill(){
+  document.getElementById("addDrillBackdrop").classList.remove("open");
+}
+// addDrillBtn is now rendered dynamically at the bottom of the session list (see render()),
+// so it's wired up inside render() rather than here.
+document.getElementById("addDrillClose").addEventListener("click", closeAddDrill);
+document.getElementById("addDrillBackdrop").addEventListener("click", (e) => {
+  if(e.target.id === "addDrillBackdrop") closeAddDrill();
+});
+document.getElementById("addDrillSearch").addEventListener("input", renderAddDrillList);
+
+// ---- Render ----
+function updateGenerateButtonLabel(){
+  const btn = document.getElementById("genBtn");
+  if(btn) btn.textContent = sessionSlots.length === 0 ? "Generate" : "Generate New";
+}
+
+function wireAddDrillBtn(){
+  const btn = document.getElementById("addDrillBtn");
+  if(btn) btn.addEventListener("click", openAddDrill);
+}
+
+// ---- Custom drill modal (one-off drill, not saved to the library) ----
+function wireCustomDrillBtn(){
+  const btn = document.getElementById("customDrillBtn");
+  if(btn) btn.addEventListener("click", openCustomDrill);
+}
+function openCustomDrill(){
+  const catSelect = document.getElementById("customDrillCat");
+  const meta = activeSlotMeta();
+  catSelect.innerHTML = activeCatOrder().map(cat => `<option value="${cat}">${meta[cat].label}</option>`).join("");
+  document.getElementById("customDrillName").value = "";
+  catSelect.value = "warmup";
+  document.getElementById("customDrillDur").value = "";
+  document.getElementById("customDrillNotes").value = "";
+  document.getElementById("customDrillError").style.display = "none";
+  document.getElementById("customDrillBackdrop").classList.add("open");
+}
+function closeCustomDrill(){
+  document.getElementById("customDrillBackdrop").classList.remove("open");
+}
+document.getElementById("customDrillClose").addEventListener("click", closeCustomDrill);
+document.getElementById("customDrillBackdrop").addEventListener("click", (e) => {
+  if(e.target.id === "customDrillBackdrop") closeCustomDrill();
+});
+document.getElementById("customDrillSubmit").addEventListener("click", () => {
+  const name = document.getElementById("customDrillName").value.trim();
+  const cat = document.getElementById("customDrillCat").value;
+  const dur = parseInt(document.getElementById("customDrillDur").value, 10);
+  const notes = document.getElementById("customDrillNotes").value.trim();
+  const errorEl = document.getElementById("customDrillError");
+
+  if(!name || !dur || dur < 1){
+    errorEl.style.display = "block";
+    return;
+  }
+  errorEl.style.display = "none";
+
+  const drill = {
+    name: name,
+    desc: notes || "Custom drill — added for this session only.",
+    code: "both",
+    age: "both",
+    dur: dur,
+    theme: [],
+    minPlayers: 2,
+    equipment: [],
+    isCustom: true
+  };
+  sessionSlots.push({ id: freshId(), cat, drill });
+  lastSkippedCategories = []; trimResultMsg = "";
+  closeCustomDrill();
+  render();
+});
+
+// ---- Edit drill modal (adjust duration/notes for one slot only — clones the
+// drill rather than mutating the shared DB entry, so the library stays untouched) ----
+let editingSlotId = null;
+
+function openEditDrill(id){
+  const slot = findSlot(id);
+  if(!slot) return;
+  editingSlotId = id;
+  document.getElementById("editDrillTitle").textContent = "Edit: " + slot.drill.name;
+  document.getElementById("editDrillDur").value = slot.drill.dur;
+  document.getElementById("editDrillNotes").value = slot.drill.desc;
+  document.getElementById("editDrillError").style.display = "none";
+  document.getElementById("editDrillBackdrop").classList.add("open");
+}
+function closeEditDrill(){
+  document.getElementById("editDrillBackdrop").classList.remove("open");
+  editingSlotId = null;
+}
+document.getElementById("editDrillClose").addEventListener("click", closeEditDrill);
+document.getElementById("editDrillBackdrop").addEventListener("click", (e) => {
+  if(e.target.id === "editDrillBackdrop") closeEditDrill();
+});
+document.getElementById("editDrillSubmit").addEventListener("click", () => {
+  const slot = findSlot(editingSlotId);
+  if(!slot) return;
+  const dur = parseInt(document.getElementById("editDrillDur").value, 10);
+  const notes = document.getElementById("editDrillNotes").value.trim();
+  const errorEl = document.getElementById("editDrillError");
+
+  if(!dur || dur < 1){
+    errorEl.style.display = "block";
+    return;
+  }
+  errorEl.style.display = "none";
+
+  // Clone, don't mutate — slot.drill may be a direct reference into activeDB()[cat],
+  // so editing must never change the shared library entry itself.
+  slot.drill = { ...slot.drill, dur, desc: notes || slot.drill.desc, isEdited: !slot.drill.isCustom };
+  closeEditDrill();
+  render();
+});
+
+function render(){
+  const output = document.getElementById("output");
+  updateGenerateButtonLabel();
+
+  if(sessionSlots.length === 0){
+    output.innerHTML = `
+      <div class="empty-state">Hit Generate for a ready-made session, or build your own below.</div>
+      <button class="slot-btn" id="addDrillBtn" style="width:100%; margin-top:12px; padding:10px;">➕ Add drill from library (${libCount()})</button>
+      <button class="slot-btn" id="customDrillBtn" style="width:100%; margin-top:8px; padding:10px;">📝 Add a custom drill</button>`;
+    wireAddDrillBtn();
+    wireCustomDrillBtn();
+    return;
+  }
+
+  const total = sessionSlots.reduce((sum, s) => sum + s.drill.dur, 0);
+
+  let html = `
+    <div class="session-head">
+      <h2>Session</h2>
+      <span class="session-total">${total} min total</span>
+    </div>
+    ${lastSkippedCategories.length > 0 ? `<div class="filter-warning">⚠️ No drill matched your filters for: ${lastSkippedCategories.map(c => activeSlotMeta()[c].label).join(", ")}. Try loosening Players, Code, or Age.</div>` : ""}
+    <details class="trim-details">
+      <summary>⏱️ Trim to a specific length</summary>
+      <div class="trim-row">
+        <span>Target:</span>
+        <input type="number" id="trimTargetInput" min="10" value="${trimTarget}" placeholder="min">
+        <button class="trim-btn" id="trimBtn">Trim to fit</button>
+        ${trimResultMsg ? `<span class="trim-result">${trimResultMsg}</span>` : ""}
+      </div>
+    </details>
+    <div class="timeline">`;
+  sessionSlots.forEach(s => {
+    const pct = (s.drill.dur / total * 100).toFixed(1);
+    html += `<div class="tl-seg ${activeSlotMeta()[s.cat].tl}" style="width:${pct}%"></div>`;
+  });
+  html += `</div>`;
+
+  sessionSlots.forEach((s, i) => {
+    const drill = s.drill;
+    const meta = activeSlotMeta()[s.cat];
+    html += `
+      <div class="slot">
+        <div class="slot-top">
+          <p class="slot-label">${meta.label}</p>
+          <div class="order-btns">
+            <button class="order-btn" data-id="${s.id}" data-dir="-1" ${i === 0 ? "disabled" : ""}>&#8593;</button>
+            <button class="order-btn" data-id="${s.id}" data-dir="1" ${i === sessionSlots.length - 1 ? "disabled" : ""}>&#8595;</button>
+            <button class="order-btn" data-action="remove" data-id="${s.id}" title="Remove block">&#10005;</button>
+          </div>
+        </div>
+        <p class="slot-name">${drill.name}</p>
+        <p class="slot-desc">${drill.desc}</p>
+        <div class="slot-meta">
+          <span class="tag ${tagClass(drill.code)}">${tagLabel(drill.code)}</span>
+          ${drill.age !== "both" ? `<span class="tag tag-u10">${drill.age.toUpperCase()}</span>` : ""}
+          ${drill.isCustom ? `<span class="tag" style="background:var(--carraig-red);">🆕 Custom</span>` : ""}
+          ${drill.isEdited ? `<span class="tag" style="background:var(--carraig-red);">🔧 Edited</span>` : ""}
+          <span class="duration-tag">${drill.dur} min</span>
+          ${playerEquipTags(drill)}
+          ${drill.diagram ? `<button class="slot-btn" data-action="diagram" data-id="${s.id}">📐 Diagram</button>` : ""}
+          <button class="slot-btn" data-action="swap" data-id="${s.id}">🔀 Swap</button>
+          <button class="slot-btn" data-action="choose" data-id="${s.id}">☰ Choose</button>
+          <button class="slot-btn" data-action="edit" data-id="${s.id}">✏️ Edit</button>
+          ${drill.id ? `<button class="slot-btn" data-action="libedit" data-id="${s.id}">🗄️ Edit library</button>` : ""}
+        </div>
+        ${drill.id ? ratingRowHtml(drill, s.id) : ""}
+      </div>`;
+  });
+
+  html += `<button class="slot-btn" id="addDrillBtn" style="width:100%; margin-top:16px; padding:10px;">➕ Add drill from library (${libCount()})</button>`;
+  html += `<button class="slot-btn" id="customDrillBtn" style="width:100%; margin-top:8px; padding:10px;">📝 Add a custom drill</button>`;
+  html += `<button class="slot-btn" id="exportBtn" style="width:100%; margin-top:8px; padding:10px;">📤 Share session</button>`;
+  html += `<button class="slot-btn" id="shareSessionBtn" style="width:100%; margin-top:8px; padding:10px;">💾 Save &amp; share this session</button>`;
+  html += `<button class="slot-btn" id="logRunBtn" style="width:100%; margin-top:8px; padding:10px;">📝 Log this as run</button>`;
+
+  output.innerHTML = html;
+
+  output.querySelectorAll('[data-action="swap"]').forEach(btn => {
+    btn.addEventListener("click", () => rerollSlot(btn.dataset.id));
+  });
+  output.querySelectorAll('[data-action="choose"]').forEach(btn => {
+    btn.addEventListener("click", () => openPicker(btn.dataset.id));
+  });
+  output.querySelectorAll('[data-action="edit"]').forEach(btn => {
+    btn.addEventListener("click", () => openEditDrill(btn.dataset.id));
+  });
+  output.querySelectorAll('[data-action="libedit"]').forEach(btn => {
+    btn.addEventListener("click", () => openLibDrillEdit(findSlot(btn.dataset.id).drill));
+  });
+  output.querySelectorAll('[data-action="rate"]').forEach(btn => {
+    btn.addEventListener("click", () => openRateDrill(findSlot(btn.dataset.id).drill));
+  });
+  output.querySelectorAll('[data-action="diagram"]').forEach(btn => {
+    btn.addEventListener("click", () => openDiagram(btn.dataset.id));
+  });
+  output.querySelectorAll('[data-action="remove"]').forEach(btn => {
+    btn.addEventListener("click", () => removeSlot(btn.dataset.id));
+  });
+  output.querySelectorAll(".order-btn:not([data-action])").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if(btn.disabled) return;
+      moveSlot(btn.dataset.id, parseInt(btn.dataset.dir, 10));
+    });
+  });
+
+  const exportBtn = document.getElementById("exportBtn");
+  if(exportBtn){
+    exportBtn.addEventListener("click", openExportMenu);
+  }
+  const trimTargetInput = document.getElementById("trimTargetInput");
+  if(trimTargetInput){
+    trimTargetInput.addEventListener("input", (e) => { trimTarget = e.target.value; trimResultMsg = ""; });
+  }
+  const trimBtn = document.getElementById("trimBtn");
+  if(trimBtn){
+    trimBtn.addEventListener("click", trimToFit);
+  }
+  wireAddDrillBtn();
+  wireCustomDrillBtn();
+  const shareSessionBtn = document.getElementById("shareSessionBtn");
+  if(shareSessionBtn) shareSessionBtn.addEventListener("click", openShareModal);
+  const logRunBtn = document.getElementById("logRunBtn");
+  if(logRunBtn) logRunBtn.addEventListener("click", openLogRunModal);
+}
+
+// ---- Ratings (drill_ratings table) ----
+// ratingsMap: drillId -> { sum, count }
+let ratingsMap = {};
+function ratingRowHtml(drill, slotId){
+  const agg = ratingsMap[drill.id];
+  const avgStr = agg && agg.count ? `★ ${(agg.sum / agg.count).toFixed(1)} (${agg.count})` : "No ratings yet";
+  return `<div class="rating-row">
+    <span class="rating-avg">${avgStr}</span>
+    <button class="slot-btn" data-action="rate" data-id="${slotId}">⭐ Rate this drill</button>
+  </div>`;
+}
+async function fetchRatings(){
+  ratingsMap = {};
+  try{
+    const { data, error } = await sb.from('drill_ratings').select('drill_id, rating');
+    if(error) throw error;
+    (data || []).forEach(r => {
+      if(!ratingsMap[r.drill_id]) ratingsMap[r.drill_id] = { sum:0, count:0 };
+      ratingsMap[r.drill_id].sum += r.rating;
+      ratingsMap[r.drill_id].count += 1;
+    });
+  } catch(err){
+    console.warn("Could not load ratings:", err);
+  }
+}
+let ratingDrill = null;
+let ratingValue = 0;
+function openRateDrill(drill){
+  ratingDrill = drill;
+  ratingValue = 0;
+  document.getElementById("rateDrillTitle").textContent = "Rate: " + drill.name;
+  document.getElementById("rateDrillNotes").value = "";
+  document.getElementById("rateDrillError").style.display = "none";
+  renderStars();
+  document.getElementById("rateDrillBackdrop").classList.add("open");
+}
+function renderStars(){
+  document.querySelectorAll("#rateStars .star-btn").forEach(b => {
+    b.classList.toggle("on", parseInt(b.dataset.v, 10) <= ratingValue);
+  });
+}
+document.querySelectorAll("#rateStars .star-btn").forEach(b => {
+  b.addEventListener("click", () => { ratingValue = parseInt(b.dataset.v, 10); renderStars(); });
+});
+document.getElementById("rateDrillClose").addEventListener("click", () => {
+  document.getElementById("rateDrillBackdrop").classList.remove("open");
+});
+document.getElementById("rateDrillBackdrop").addEventListener("click", (e) => {
+  if(e.target.id === "rateDrillBackdrop") document.getElementById("rateDrillBackdrop").classList.remove("open");
+});
+document.getElementById("rateDrillSubmit").addEventListener("click", async () => {
+  if(!ratingValue){
+    document.getElementById("rateDrillError").style.display = "block";
+    return;
+  }
+  document.getElementById("rateDrillError").style.display = "none";
+  const notes = document.getElementById("rateDrillNotes").value.trim();
+  try{
+    const { error } = await sb.from('drill_ratings').insert({
+      drill_id: ratingDrill.id,
+      coach_name: getCoachName(),
+      rating: ratingValue,
+      notes: notes || null,
+      age_group: state.age !== "both" ? state.age : null
+    });
+    if(error) throw error;
+    if(!ratingsMap[ratingDrill.id]) ratingsMap[ratingDrill.id] = { sum:0, count:0 };
+    ratingsMap[ratingDrill.id].sum += ratingValue;
+    ratingsMap[ratingDrill.id].count += 1;
+    document.getElementById("rateDrillBackdrop").classList.remove("open");
+    render();
+  } catch(err){
+    document.getElementById("rateDrillError").textContent = "Could not save rating: " + (err.message || err);
+    document.getElementById("rateDrillError").style.display = "block";
+  }
+});
+
+function sessionAsText(){
+  const total = sessionSlots.reduce((sum, s) => sum + s.drill.dur, 0);
+  let lines = [`Training Session (${total} min total)`, ""];
+  sessionSlots.forEach(s => {
+    const equipStr = s.drill.equipment && s.drill.equipment.length ? ` · Equipment: ${s.drill.equipment.join(", ")}` : "";
+    lines.push(`${activeSlotMeta()[s.cat].label} — ${s.drill.dur} min · ${s.drill.minPlayers}+ players${equipStr}`);
+    lines.push(s.drill.name);
+    lines.push(s.drill.desc);
+    lines.push("");
+  });
+  return lines.join("\n").trim();
+}
+
+function copySessionAsText(btn){
+  const text = sessionAsText();
+  const originalLabel = btn.textContent;
+  const showCopied = () => {
+    btn.textContent = "✅ Copied!";
+    setTimeout(() => { btn.textContent = originalLabel; }, 1800);
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(showCopied).catch(() => fallbackCopy(text, showCopied));
+  } else {
+    fallbackCopy(text, showCopied);
+  }
+}
+
+function fallbackCopy(text, onDone){
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try{
+    document.execCommand("copy");
+    onDone();
+  } catch(e){
+    window.prompt("Copy this text:", text);
+  }
+  document.body.removeChild(ta);
+}
+
+// ---- Export menu ----
+function openExportMenu(){
+  document.getElementById("exportBackdrop").classList.add("open");
+}
+function closeExportMenu(){
+  document.getElementById("exportBackdrop").classList.remove("open");
+}
+document.getElementById("exportClose").addEventListener("click", closeExportMenu);
+document.getElementById("exportBackdrop").addEventListener("click", (e) => {
+  if(e.target.id === "exportBackdrop") closeExportMenu();
+});
+document.getElementById("exportTextBtn").addEventListener("click", () => {
+  closeExportMenu();
+  copySessionAsText(document.getElementById("exportBtn"));
+});
+document.getElementById("exportHtmlBtn").addEventListener("click", () => {
+  downloadSessionAsHTML();
+  closeExportMenu();
+});
+
+function escapeHtml(str){
+  return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+function generateSessionHTML(){
+  const total = sessionSlots.reduce((sum, s) => sum + s.drill.dur, 0);
+  const dateStr = new Date().toLocaleDateString(undefined, { weekday:"long", year:"numeric", month:"long", day:"numeric" });
+
+  const slotsHtml = sessionSlots.map(s => {
+    const drill = s.drill;
+    const meta = activeSlotMeta()[s.cat];
+    const codeTag = drill.code === "hurling" ? '<span class="tag tag-hurling">Hurling</span>'
+                  : drill.code === "football" ? '<span class="tag tag-football">Football</span>'
+                  : '<span class="tag tag-both">Both codes</span>';
+    const ageTag = drill.age !== "both" ? `<span class="tag tag-u10">${drill.age.toUpperCase()}</span>` : "";
+    const equipStr = drill.equipment && drill.equipment.length ? ` · ${escapeHtml(drill.equipment.join(", "))}` : "";
+    const diagramHtml = drill.diagram ? `<div class="diagram-wrap">${drill.diagram}</div>` : "";
+    return `
+      <div class="slot">
+        <p class="slot-label">${escapeHtml(meta.label)}</p>
+        <p class="slot-name">${escapeHtml(drill.name)}</p>
+        <p class="slot-desc">${escapeHtml(drill.desc)}</p>
+        <div class="slot-meta">${codeTag}${ageTag}<span class="duration-tag">${drill.dur} min · 👥 ${drill.minPlayers}+${equipStr}</span></div>
+        ${diagramHtml}
+      </div>`;
+  }).join("\n");
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Training Session — ${dateStr}</title>
+<style>
+  :root{
+    --ink:#111111; --paper:#FFFFFF; --paper-2:#F0F0F0;
+    --pitch:#1A6B3F; --tan:#B0510F; --navy:#1E4C8A; --u10:#7A3FA0;
+    --rule:#D0D0D0; --text-2:#333333; --text-3:#555555; --warm:#5B6B4F;
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; background:var(--paper); color:var(--ink); font-family:-apple-system,'Segoe UI',Roboto,sans-serif; line-height:1.5; }
+  .wrap{ max-width:640px; margin:0 auto; padding:24px 18px 60px; }
+  h1{ font-size:26px; font-weight:700; margin:0 0 6px; }
+  .sub{ font-size:13.5px; color:var(--text-3); margin:0 0 20px; border-bottom:3px solid var(--ink); padding-bottom:16px; }
+  .slot{ padding:16px 0; border-bottom:1px solid var(--rule); }
+  .slot-label{ font-weight:700; font-size:11.5px; color:var(--text-3); text-transform:uppercase; letter-spacing:0.03em; margin:0 0 4px; }
+  .slot-name{ font-weight:700; font-size:17px; margin:0 0 4px; }
+  .slot-desc{ font-size:14px; color:var(--text-2); margin:0 0 8px; }
+  .slot-meta{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .tag{ display:inline-block; font-weight:700; font-size:10.5px; padding:2px 7px; border-radius:2px; color:#fff; }
+  .tag-hurling{ background:var(--pitch); } .tag-football{ background:var(--navy); }
+  .tag-both{ background:var(--tan); } .tag-u10{ background:var(--u10); }
+  .duration-tag{ font-size:12px; color:var(--text-3); }
+  .diagram-wrap{ margin-top:12px; max-width:340px; }
+  .diagram-wrap svg{ width:100%; height:auto; }
+  .dg-a{ fill:var(--pitch); } .dg-d{ fill:var(--tan); } .dg-c{ fill:var(--navy); }
+  .dg-line{ stroke:var(--ink); stroke-width:1.5; fill:none; }
+  .dg-line-soft{ stroke:var(--text-3); stroke-width:1.3; fill:none; }
+  .dg-zone{ fill:none; stroke:var(--rule); stroke-width:1.5; stroke-dasharray:4 3; }
+  .dg-label{ font-size:11px; fill:var(--text-3); }
+  .dg-cone{ fill:var(--paper-2); stroke:var(--ink); stroke-width:1.2; }
+  .diagram-legend{ display:flex; gap:14px; flex-wrap:wrap; margin-top:8px; font-size:11.5px; color:var(--text-3); }
+  .diagram-legend span{ display:inline-flex; align-items:center; gap:5px; }
+  .dot{ width:9px; height:9px; border-radius:50%; display:inline-block; }
+  .dot-a{ background:var(--pitch); } .dot-d{ background:var(--tan); } .dot-c{ background:var(--navy); }
+  .cone-ico{ width:11px; height:11px; }
+  footer{ margin-top:20px; padding-top:14px; border-top:2px solid var(--ink); font-size:12px; color:var(--text-3); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Training Session</h1>
+  <p class="sub">${dateStr} · ${total} min total</p>
+  ${slotsHtml}
+  <footer>Generated with the team's session generator — source: TSheehan.</footer>
+</div>
+</body>
+</html>`;
+}
+
+function downloadSessionAsHTML(){
+  const htmlStr = generateSessionHTML();
+  const blob = new Blob([htmlStr], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "training-session.html";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ---- Wire up controls ----
+function wirePillRow(rowId, stateKey){
+  const row = document.getElementById(rowId);
+  row.querySelectorAll(".pill").forEach(btn => {
+    btn.addEventListener("click", () => {
+      row.querySelectorAll(".pill").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      state[stateKey] = btn.dataset.value;
+    });
+  });
+}
+wirePillRow("codeRow", "code");
+wirePillRow("ageRow", "age");
+
+const AGE_OPTIONS = {
+  core: [["both","Either"],["u10","U10"],["u11","U11"],["u12","U12"]],
+  teen: [["both","Either"],["u16","U16/18"]],
+  u89:  [["both","Either"],["u8","U8"],["u9","U9"]],
+  u67:  [["both","Either"],["u6","U6"],["u7","U7"]]
+};
+const MODE_HINT = {
+  core: "Aims for 55–65 minutes — adjust anytime once it's built.",
+  teen: "Aims for 55–65 minutes — adjust anytime once it's built.",
+  u89:  "Builds a skills-led mix — one warm-up, three skill games, two team games. No fixed time target; trim or add on afterwards.",
+  u67:  "Builds a games-led mix — one warm-up, one skill game, three team games. No fixed time target; trim or add on afterwards."
+};
+const MODE_ABOUT = {
+  core: "This started as TSheehan's own U10 and U11 training session plans — 135 drills catalogued across two full seasons of real sessions this team has actually run, 36 of them with a layout diagram. It now also carries U10 and U12 technique drills from the official GAA Fun Do Football and Hurling Coaching Classes resources (2007) — 177 more, covering catching, kicking, striking, tackling, evasion and blocking, plus the fun games and modified games that go with each skill — all 177 with a layout diagram traced from the resource's own illustrations. It also carries 38 hurling entries for ages 11–13 from the Kellogg's GAA Cúl Camps Hurling Resource (Leinster GAA) — 30 day-session drills and games and 8 wall-ball sessions, all with a diagram — placed here alongside the U10/U12 material since the source doesn't split ages finer than 11–13. 251 of 350 drills in this mode now have a diagram. Filter by U10/U11/U12 to narrow to a specific age. U16/18 content has its own mode now — see the 13-18 tab above.",
+  teen: "The 13-18 age range got its own mode so it's no longer mixed in with the U10/U11/U12 pool. 16 football drills and games from Cavan GAA's Coaching & Games resource, all with a diagram, covering kicking, hand passing, shooting under pressure, and possession/defending games for adolescent players. Plus 30 more from a Philip Kerr (2004) football coaching manual — warm-ups, speed/agility work, passing and evasion drills, tackling technique, shooting drills and tactical games for older players, 27 of the 30 with a diagram traced from the manual's own layouts. 46 drills in total, 43 with a diagram. Football-only for now. Filter by code or players on hand; aims for 55–65 minutes.",
+  u89:  "These U8/U9 drills combine the club's own weekly session archive (131 drills catalogued across 68 sessions, not yet reviewed line-by-line the way the U10/U11 library was) with the Monaghan Drills reference pack (45 drills, football-only), the U8 sections of the GAA Fun Do Football and Hurling Coaching Classes resources (88 drills, all with a layout diagram), and 30 hurling drills and games for ages 8–10 from the Kellogg's GAA Cúl Camps Hurling Resource (all with a diagram) — 294 in total, 137 with a diagram. Skills-led, like the real U8/U9 sessions the club archive is drawn from — a warm-up, several individual skill games, then team games to finish. No fixed duration target, since session lengths vary more at this age.",
+  u67:  "These U6/U7 drills combine the club's own weekly session archive (110 drills catalogued across 50 sessions, not yet reviewed line-by-line the way the U10/U11 library was) with the GAA Fun Do Nursery Programme (196 fundamental-movement and ball-skill exercises for ages 4–8, 16 with a diagram) and 30 hurling drills and games for ages 6–7 from the Kellogg's GAA Cúl Camps Hurling Resource (all with a diagram) — 336 in total, 46 with a diagram. Games-led, like the real U6/U7 sessions the club archive is drawn from — a short warm-up then mostly named games, with the occasional skill game mixed in. No fixed duration target, since session lengths vary more at this age."
+};
+function rebuildAgeRow(){
+  const row = document.getElementById("ageRow");
+  row.innerHTML = AGE_OPTIONS[mode].map((pair,i) =>
+    `<button class="pill${i===0 ? ' active' : ''}" data-value="${pair[0]}">${pair[1]}</button>`
+  ).join("");
+  wirePillRow("ageRow", "age");
+}
+rebuildAgeRow(); // render the full age-pill set for the default mode on first load (was previously only rebuilt on a mode switch, so U12/U16-18 never appeared until you toggled modes)
+function switchMode(newMode){
+  mode = newMode;
+  state = { code:"both", age:"both", theme:"any", players:null };
+  sessionSlots = [];
+  lastSkippedCategories = [];
+  trimResultMsg = "";
+  document.getElementById("codeRow").querySelectorAll(".pill").forEach((b,i) => b.classList.toggle("active", i===0));
+  rebuildAgeRow();
+  document.getElementById("playersInput").value = "";
+  document.getElementById("playersGroup").style.display = (mode === "core" || mode === "teen") ? "" : "none";
+  document.getElementById("themeGroup").style.display = (mode === "core" || mode === "teen") ? "" : "none";
+  document.getElementById("generateHint").textContent = MODE_HINT[mode];
+  document.getElementById("aboutNoteBody").textContent = MODE_ABOUT[mode];
+  document.getElementById("output").innerHTML = '<div class="empty-state">Hit Generate for a ready-made session, or build your own below.</div>';
+}
+document.getElementById("modeRow").querySelectorAll(".pill").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.getElementById("modeRow").querySelectorAll(".pill").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    switchMode(btn.dataset.value);
+  });
+});
+
+document.getElementById("playersInput").addEventListener("input", (e) => {
+  const val = parseInt(e.target.value, 10);
+  state.players = (e.target.value.trim() === "" || isNaN(val) || val < 1) ? null : val;
+});
+
+const themeRow = document.getElementById("themeRow");
+themeRow.innerHTML = THEMES.map((t,i) =>
+  `<button class="pill${i===0 ? ' active' : ''}" data-value="${t.value}">${t.label}</button>`
+).join("");
+wirePillRow("themeRow", "theme");
+
+document.getElementById("genBtn").addEventListener("click", buildSession);
+
+// ---- Theme toggle (light/dark) ----
+function applyColorMode(mode){
+  document.documentElement.setAttribute("data-theme", mode);
+  document.documentElement.style.colorScheme = mode;
+  const btn = document.getElementById("themeToggle");
+  btn.textContent = mode === "dark" ? "☀️ Light" : "🌙 Dark";
+}
+let currentColorMode = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+applyColorMode(currentColorMode);
+document.getElementById("themeToggle").addEventListener("click", () => {
+  currentColorMode = currentColorMode === "dark" ? "light" : "dark";
+  applyColorMode(currentColorMode);
+});
+
+// ---- Initial render (sets up the empty-state Add-drill button and Generate label) ----
+render();
+
+// =====================================================================
+// ---- Supabase: auth, live drill data, collaborative edits, ratings,
+//      save & share, and session logging. Added in v21. ----
+// =====================================================================
+const SUPABASE_URL = "https://mwjqdtsfsjefxpzfjcex.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im13anFkdHNmc2plZnhwemZqY2V4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODczNTE2NDMsImV4cCI6MjEwMjkyNzY0M30.aBGfOBwsUgGBNnsbMMATIcM75rWi56S3OsRTqIBNudc";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+function getCoachName(){
+  let name = localStorage.getItem("matchfit_coach_name");
+  if(!name){
+    name = window.prompt("What name should show up as the coach for things you add, rate, or log?", "") || "Coach";
+    localStorage.setItem("matchfit_coach_name", name);
+  }
+  return name;
+}
+
+function showApp(user){
+  document.getElementById("loginScreen").style.display = "none";
+  document.getElementById("appRoot").style.display = "";
+  document.getElementById("authBar").innerHTML =
+    `<span>Signed in as ${escapeHtml(user.email)}</span><button id="signOutBtn">Sign out</button>`;
+  document.getElementById("signOutBtn").addEventListener("click", async () => {
+    await sb.auth.signOut();
+  });
+}
+function showLogin(){
+  document.getElementById("appRoot").style.display = "none";
+  document.getElementById("loginScreen").style.display = "flex";
+}
+
+let libraryLoadedOnce = false;
+async function onSignedIn(user){
+  showApp(user);
+  if(libraryLoadedOnce) return; // avoid re-fetching on every tab focus / token refresh
+  libraryLoadedOnce = true;
+  await fetchDrillsFromSupabase();
+  await fetchRatings();
+  render();
+  await loadSharedSessionIfAny();
+}
+
+sb.auth.getSession().then(({ data }) => {
+  if(data && data.session){ onSignedIn(data.session.user); }
+  else { showLogin(); }
+});
+sb.auth.onAuthStateChange((event, session) => {
+  if(session && session.user){ onSignedIn(session.user); }
+  else { libraryLoadedOnce = false; showLogin(); }
+});
+
+document.getElementById("loginSendBtn").addEventListener("click", async () => {
+  const email = document.getElementById("loginEmail").value.trim();
+  const msg = document.getElementById("loginMsg");
+  if(!email){
+    msg.className = "login-msg err";
+    msg.textContent = "Enter an email address first.";
+    return;
+  }
+  msg.className = "login-msg";
+  msg.textContent = "Sending…";
+  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.href } });
+  if(error){
+    msg.className = "login-msg err";
+    msg.textContent = "Could not send link: " + error.message;
+  } else {
+    msg.className = "login-msg ok";
+    msg.textContent = "Check your email for a sign-in link.";
+  }
+});
+
+// ---- Live drill data ----
+async function fetchDrillsFromSupabase(){
+  const banner = document.getElementById("libBanner");
+  banner.className = "lib-banner";
+  banner.style.display = "";
+  banner.textContent = "Loading drill library…";
+
+  Object.keys(DB).forEach(c => DB[c] = []);
+  Object.keys(TEEN_DB).forEach(c => TEEN_DB[c] = []);
+  Object.keys(YOUNG67_DB).forEach(c => YOUNG67_DB[c] = []);
+  Object.keys(YOUNG89_DB).forEach(c => YOUNG89_DB[c] = []);
+
+  try{
+    const { data, error } = await sb.from("drills").select("*").eq("is_deleted", false);
+    if(error) throw error;
+    (data || []).forEach(row => {
+      const target = row.mode === "teen" ? TEEN_DB
+                    : row.mode === "u89" ? YOUNG89_DB
+                    : row.mode === "u67" ? YOUNG67_DB
+                    : DB;
+      if(!target[row.category]) target[row.category] = [];
+      target[row.category].push({
+        id: row.id,
+        name: row.name,
+        desc: row.description,
+        code: row.code,
+        age: row.age,
+        dur: row.duration_minutes,
+        theme: row.theme || [],
+        minPlayers: row.min_players,
+        equipment: row.equipment || [],
+        diagram: row.diagram || undefined,
+        source: row.source,
+        createdBy: row.created_by
+      });
+    });
+    if(!data || data.length === 0){
+      banner.className = "lib-banner err";
+      banner.textContent = "Signed in, but no drills came back. Either the library is genuinely empty, or your email isn't on the coach list yet — ask Damien to add you to allowed_coaches.";
+    } else {
+      banner.style.display = "none";
+    }
+  } catch(err){
+    banner.className = "lib-banner err";
+    banner.textContent = "Could not load the drill library (" + (err && err.message ? err.message : err) + "). Showing an empty library — try reloading, or ask Damien to check the coach list.";
+  }
+}
+
+// ---- Collaborative add/edit of library drills ----
+function openLibDrillAdd(){
+  document.getElementById("libDrillTitle").textContent = "Add a drill to the library";
+  document.getElementById("libDrillBackdrop").dataset.editingId = "";
+  document.getElementById("libDrillMode").value = mode;
+  populateLibDrillCatOptions();
+  document.getElementById("libDrillName").value = "";
+  document.getElementById("libDrillDesc").value = "";
+  document.getElementById("libDrillCode").value = "both";
+  document.getElementById("libDrillAge").value = "both";
+  document.getElementById("libDrillDur").value = "";
+  document.getElementById("libDrillTheme").value = "";
+  document.getElementById("libDrillMinPlayers").value = "2";
+  document.getElementById("libDrillEquipment").value = "";
+  document.getElementById("libDrillDiagram").value = "";
+  document.getElementById("libDrillError").style.display = "none";
+  document.getElementById("libDrillBackdrop").classList.add("open");
+}
+function openLibDrillEdit(drill){
+  document.getElementById("libDrillTitle").textContent = "Edit library drill";
+  document.getElementById("libDrillBackdrop").dataset.editingId = drill.id;
+  document.getElementById("libDrillMode").value = mode;
+  populateLibDrillCatOptions();
+  // best-effort: select the category this drill actually lives under
+  const cat = Object.keys(activeDB()).find(c => activeDB()[c].some(d => d.id === drill.id));
+  if(cat) document.getElementById("libDrillCat").value = cat;
+  document.getElementById("libDrillName").value = drill.name;
+  document.getElementById("libDrillDesc").value = drill.desc;
+  document.getElementById("libDrillCode").value = drill.code;
+  document.getElementById("libDrillAge").value = drill.age;
+  document.getElementById("libDrillDur").value = drill.dur;
+  document.getElementById("libDrillTheme").value = (drill.theme || []).join(", ");
+  document.getElementById("libDrillMinPlayers").value = drill.minPlayers;
+  document.getElementById("libDrillEquipment").value = (drill.equipment || []).join(", ");
+  document.getElementById("libDrillDiagram").value = drill.diagram || "";
+  document.getElementById("libDrillError").style.display = "none";
+  document.getElementById("libDrillBackdrop").classList.add("open");
+}
+function populateLibDrillCatOptions(){
+  const modeVal = document.getElementById("libDrillMode").value;
+  const cats = (modeVal === "core" || modeVal === "teen") ? CATEGORY_ORDER : YOUNG_CATEGORY_ORDER;
+  const meta = (modeVal === "core" || modeVal === "teen") ? SLOT_META : YOUNG_SLOT_META;
+  document.getElementById("libDrillCat").innerHTML = cats.map(c => `<option value="${c}">${meta[c].label}</option>`).join("");
+}
+document.getElementById("libDrillMode").addEventListener("change", populateLibDrillCatOptions);
+document.getElementById("addLibDrillBtn").addEventListener("click", openLibDrillAdd);
+document.getElementById("libDrillClose").addEventListener("click", () => {
+  document.getElementById("libDrillBackdrop").classList.remove("open");
+});
+document.getElementById("libDrillBackdrop").addEventListener("click", (e) => {
+  if(e.target.id === "libDrillBackdrop") document.getElementById("libDrillBackdrop").classList.remove("open");
+});
+document.getElementById("libDrillSubmit").addEventListener("click", async () => {
+  const name = document.getElementById("libDrillName").value.trim();
+  const desc = document.getElementById("libDrillDesc").value.trim();
+  const age = document.getElementById("libDrillAge").value.trim();
+  const dur = parseInt(document.getElementById("libDrillDur").value, 10);
+  const errorEl = document.getElementById("libDrillError");
+  if(!name || !desc || !age || !dur || dur < 1){
+    errorEl.style.display = "block";
+    return;
+  }
+  errorEl.style.display = "none";
+
+  const modeVal = document.getElementById("libDrillMode").value;
+  const catVal = document.getElementById("libDrillCat").value;
+  const payload = {
+    mode: modeVal,
+    category: catVal,
+    name,
+    description: desc,
+    code: document.getElementById("libDrillCode").value,
+    age,
+    duration_minutes: dur,
+    theme: document.getElementById("libDrillTheme").value.split(",").map(s => s.trim()).filter(Boolean),
+    min_players: parseInt(document.getElementById("libDrillMinPlayers").value, 10) || 2,
+    equipment: document.getElementById("libDrillEquipment").value.split(",").map(s => s.trim()).filter(Boolean),
+    diagram: document.getElementById("libDrillDiagram").value.trim() || null,
+    created_by: getCoachName()
+  };
+
+  const editingId = document.getElementById("libDrillBackdrop").dataset.editingId;
+  try{
+    if(editingId){
+      const { error } = await sb.from("drills").update(payload).eq("id", editingId);
+      if(error) throw error;
+      patchLocalDrill(editingId, payload);
+    } else {
+      const { data, error } = await sb.from("drills").insert(payload).select().single();
+      if(error) throw error;
+      const target = modeVal === "teen" ? TEEN_DB : modeVal === "u89" ? YOUNG89_DB : modeVal === "u67" ? YOUNG67_DB : DB;
+      if(!target[catVal]) target[catVal] = [];
+      target[catVal].push({
+        id: data.id, name: data.name, desc: data.description, code: data.code, age: data.age,
+        dur: data.duration_minutes, theme: data.theme || [], minPlayers: data.min_players,
+        equipment: data.equipment || [], diagram: data.diagram || undefined, source: data.source, createdBy: data.created_by
+      });
+    }
+    document.getElementById("libDrillBackdrop").classList.remove("open");
+    render();
+  } catch(err){
+    errorEl.textContent = "Could not save: " + (err.message || err);
+    errorEl.style.display = "block";
+  }
+});
+// Patches every in-memory copy of a drill by id (it may appear in activeDB()
+// AND as a snapshot inside a current session slot) after a library edit.
+function patchLocalDrill(id, payload){
+  [DB, TEEN_DB, YOUNG67_DB, YOUNG89_DB].forEach(dbObj => {
+    Object.keys(dbObj).forEach(cat => {
+      dbObj[cat] = dbObj[cat].map(d => d.id === id ? {
+        ...d, name: payload.name, desc: payload.description, code: payload.code, age: payload.age,
+        dur: payload.duration_minutes, theme: payload.theme, minPlayers: payload.min_players,
+        equipment: payload.equipment, diagram: payload.diagram || undefined
+      } : d);
+    });
+  });
+  sessionSlots.forEach(s => {
+    if(s.drill.id === id){
+      s.drill = {
+        ...s.drill, name: payload.name, desc: payload.description, code: payload.code, age: payload.age,
+        dur: payload.duration_minutes, theme: payload.theme, minPlayers: payload.min_players,
+        equipment: payload.equipment, diagram: payload.diagram || undefined
+      };
+    }
+  });
+}
+
+// ---- Save & share a built session ----
+let lastSavedSessionId = null;
+function openShareModal(){
+  document.getElementById("shareTitle").value = new Date().toLocaleDateString() + " — " + mode;
+  document.getElementById("shareResult").style.display = "none";
+  document.getElementById("shareBackdrop").classList.add("open");
+}
+document.getElementById("shareClose").addEventListener("click", () => {
+  document.getElementById("shareBackdrop").classList.remove("open");
+});
+document.getElementById("shareBackdrop").addEventListener("click", (e) => {
+  if(e.target.id === "shareBackdrop") document.getElementById("shareBackdrop").classList.remove("open");
+});
+document.getElementById("shareSubmit").addEventListener("click", async () => {
+  const title = document.getElementById("shareTitle").value.trim() || (new Date().toLocaleDateString() + " — " + mode);
+  try{
+    const { data, error } = await sb.from("sessions").insert({
+      title, mode,
+      slots: sessionSlots.map(s => ({ cat: s.cat, drill: s.drill })),
+      created_by: getCoachName()
+    }).select().single();
+    if(error) throw error;
+    lastSavedSessionId = data.id;
+    const link = window.location.origin + window.location.pathname + "?share=" + data.share_token;
+    document.getElementById("shareLinkInput").value = link;
+    document.getElementById("shareResult").style.display = "";
+  } catch(err){
+    alert("Could not save session: " + (err.message || err));
+  }
+});
+document.getElementById("shareCopyBtn").addEventListener("click", () => {
+  const input = document.getElementById("shareLinkInput");
+  input.select();
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(input.value).catch(() => document.execCommand("copy"));
+  } else {
+    document.execCommand("copy");
+  }
+  const btn = document.getElementById("shareCopyBtn");
+  const orig = btn.textContent;
+  btn.textContent = "✅ Copied!";
+  setTimeout(() => { btn.textContent = orig; }, 1800);
+});
+
+async function loadSharedSessionIfAny(){
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("share");
+  if(!token) return;
+  try{
+    const { data, error } = await sb.from("sessions").select("*").eq("share_token", token).single();
+    if(error) throw error;
+    mode = data.mode;
+    document.getElementById("modeRow").querySelectorAll(".pill").forEach(b => b.classList.toggle("active", b.dataset.value === mode));
+    rebuildAgeRow();
+    document.getElementById("playersGroup").style.display = (mode === "core" || mode === "teen") ? "" : "none";
+    document.getElementById("themeGroup").style.display = (mode === "core" || mode === "teen") ? "" : "none";
+    document.getElementById("generateHint").textContent = MODE_HINT[mode];
+    document.getElementById("aboutNoteBody").textContent = MODE_ABOUT[mode];
+    sessionSlots = (data.slots || []).map(s => ({ id: freshId(), cat: s.cat, drill: s.drill }));
+    lastSavedSessionId = data.id;
+    lastSkippedCategories = [];
+    trimResultMsg = "";
+    render();
+  } catch(err){
+    console.warn("Could not load shared session:", err);
+  }
+}
+
+// ---- Log a session as run ----
+function openLogRunModal(){
+  document.getElementById("logRunDate").value = new Date().toISOString().slice(0, 10);
+  document.getElementById("logRunCoach").value = getCoachName();
+  document.getElementById("logRunAttendance").value = "";
+  document.getElementById("logRunNotes").value = "";
+  document.getElementById("logRunError").style.display = "none";
+  document.getElementById("logRunBackdrop").classList.add("open");
+}
+document.getElementById("logRunClose").addEventListener("click", () => {
+  document.getElementById("logRunBackdrop").classList.remove("open");
+});
+document.getElementById("logRunBackdrop").addEventListener("click", (e) => {
+  if(e.target.id === "logRunBackdrop") document.getElementById("logRunBackdrop").classList.remove("open");
+});
+document.getElementById("logRunSubmit").addEventListener("click", async () => {
+  const coach = document.getElementById("logRunCoach").value.trim();
+  const errorEl = document.getElementById("logRunError");
+  if(!coach){
+    errorEl.style.display = "block";
+    return;
+  }
+  errorEl.style.display = "none";
+  const attendanceVal = parseInt(document.getElementById("logRunAttendance").value, 10);
+  try{
+    const { error } = await sb.from("session_logs").insert({
+      session_id: lastSavedSessionId,
+      title: document.getElementById("shareTitle") && document.getElementById("shareTitle").value.trim()
+             ? document.getElementById("shareTitle").value.trim()
+             : (new Date().toLocaleDateString() + " — " + mode),
+      mode,
+      date_run: document.getElementById("logRunDate").value,
+      coach_name: coach,
+      attendance: isNaN(attendanceVal) ? null : attendanceVal,
+      notes: document.getElementById("logRunNotes").value.trim() || null,
+      slots: sessionSlots.map(s => ({ cat: s.cat, drill: s.drill }))
+    });
+    if(error) throw error;
+    localStorage.setItem("matchfit_coach_name", coach);
+    document.getElementById("logRunBackdrop").classList.remove("open");
+  } catch(err){
+    errorEl.textContent = "Could not log session: " + (err.message || err);
+    errorEl.style.display = "block";
+  }
+});
+
+// ---- View session log ----
+async function openViewLog(){
+  document.getElementById("viewLogBackdrop").classList.add("open");
+  const list = document.getElementById("viewLogList");
+  list.innerHTML = '<p style="color:var(--text-3); font-size:13.5px;">Loading…</p>';
+  try{
+    const { data, error } = await sb.from("session_logs").select("*").order("date_run", { ascending:false });
+    if(error) throw error;
+    if(!data || data.length === 0){
+      list.innerHTML = '<p style="color:var(--text-3); font-size:13.5px;">No sessions logged yet.</p>';
+      return;
+    }
+    list.innerHTML = data.map(row => `
+      <div class="slot">
+        <p class="slot-name">${escapeHtml(row.title)}</p>
+        <p class="slot-desc">${row.date_run} · ${escapeHtml(row.coach_name)}${row.attendance != null ? " · " + row.attendance + " attending" : ""}</p>
+        ${row.notes ? `<p class="slot-desc">${escapeHtml(row.notes)}</p>` : ""}
+      </div>`).join("");
+  } catch(err){
+    list.innerHTML = '<p style="color:var(--carraig-red); font-size:13.5px;">Could not load session log: ' + escapeHtml(err.message || String(err)) + '</p>';
+  }
+}
+document.getElementById("viewLogBtn").addEventListener("click", openViewLog);
+document.getElementById("viewLogClose").addEventListener("click", () => {
+  document.getElementById("viewLogBackdrop").classList.remove("open");
+});
+document.getElementById("viewLogBackdrop").addEventListener("click", (e) => {
+  if(e.target.id === "viewLogBackdrop") document.getElementById("viewLogBackdrop").classList.remove("open");
+});
+</script>
+</body>
+</html>
