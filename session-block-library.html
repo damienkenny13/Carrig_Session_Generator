@@ -3,7 +3,7 @@
   v3 (matches session-generator.html v22):
   - Restyled to the Match Fit style guide: same palette, type, icons, top bar
     and sign-in as the generator. Light/dark toggle added.
-  - Browsing: age-range pills, search, code filter, category jump links,
+  - Browsing: age-range pills, code, category, skill, stage and length filters (category, skill and stage take several), search,
     drill cards with expandable descriptions and inline diagrams.
   - All reference text (session skeleton, venue notes, sources, data notes,
     footer) kept word for word, moved into a "Reference" section at the end.
@@ -93,9 +93,13 @@ function mfForgetUser(){ try{ localStorage.removeItem("matchfit_lastuser"); }cat
   @media (min-width:960px){
     .wrap{display:grid;grid-template-columns:320px minmax(0,1fr);column-gap:var(--space-8);align-items:start}
     .wrap > .topbar,.wrap > header,.wrap > .reference{grid-column:1 / -1}
-    .wrap > .toolbar{grid-column:1;position:sticky;top:calc(52px + var(--space-4))}
-    .wrap > .lib-count,.wrap > .jump{grid-column:1}
-    .wrap > #liveCategories{grid-column:2;grid-row:3 / span 3;min-width:0}
+    /* Filters, count and the category menu stay together in the left column and stay in view while the drills scroll */
+    .wrap > .lib-side{grid-column:1;grid-row:3;position:sticky;top:calc(52px + var(--space-4));max-height:calc(100vh - 52px - var(--space-8));overflow-y:auto;overscroll-behavior:contain}
+    .wrap > #liveCategories{grid-column:2;grid-row:3;min-width:0}
+    #liveCategories .cat-sec{scroll-margin-top:calc(52px + var(--space-4))}
+    /* Wide screens: the category menu (used most) sits first in the panel, then the filters */
+    .wrap > .lib-side{display:flex;flex-direction:column}
+    .lib-side > .lib-count-row{order:-1}
   }
 
   /* Top bar */
@@ -311,10 +315,31 @@ function mfForgetUser(){ try{ localStorage.removeItem("matchfit_lastuser"); }cat
   .search-wrap{position:relative}
   .search-wrap .ico{position:absolute;left:12px;top:12px;color:var(--ink-muted)}
   .search-wrap input{width:100%;min-height:44px;padding:0 12px 0 40px;border-radius:var(--radius-sm);border:1.5px solid var(--line-strong);background:var(--surface);color:var(--ink);font:400 16px/24px var(--font-sans)}
-  .lib-count{margin:0 0 var(--space-3);font:500 14px/20px var(--font-mono);color:var(--ink-muted)}
-  .jump{display:flex;gap:var(--space-2);overflow-x:auto;padding-bottom:var(--space-2);margin-bottom:var(--space-4);scrollbar-width:none}
-  .jump a{flex:none;display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 12px;border-radius:var(--radius-pill);background:var(--surface);border:1px solid var(--hairline);color:var(--ink);text-decoration:none;font:600 14px/20px var(--font-sans)}
-  .jump a .ico{width:18px;height:18px;color:var(--cat)}
+  .lib-count{margin:0;font:500 14px/20px var(--font-mono);color:var(--ink-muted)}
+  [hidden]{display:none!important}  /* hidden always wins over a component's own display */
+  .lib-count-row{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);min-height:44px;margin:0 0 var(--space-3)}
+  .chips .pill{min-height:40px;padding:0 12px;font-size:14px}
+  .chips .pill .n{margin-left:2px;font:500 12px/16px var(--font-mono);color:var(--ink-muted)}
+  .chips .pill.active .n{color:inherit;opacity:.8}
+  .chips .pill[disabled]{opacity:.45;cursor:default}
+  .chips .pill .ico{width:16px;height:16px}
+  /* Phones: each chip group is one row you swipe sideways, so the drills start sooner */
+  @media (max-width:599px){
+    .chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-right:calc(-1 * var(--space-4));padding-right:var(--space-4);-webkit-overflow-scrolling:touch}
+    .chips::-webkit-scrollbar{display:none}
+    .chips .pill{flex:none}
+  }
+  .more-filters{border-top:1px solid var(--hairline);padding-top:var(--space-2)}
+  .more-filters summary{display:flex;align-items:center;gap:var(--space-2);min-height:44px;cursor:pointer;font:600 15px/20px var(--font-sans);color:var(--green);list-style:none}
+  .more-filters summary::-webkit-details-marker{display:none}
+  .more-filters summary::before{content:"";width:8px;height:8px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);transition:transform .15s}
+  .more-filters[open] summary::before{transform:rotate(45deg)}
+  .more-on{font:500 13px/18px var(--font-sans);color:var(--ink-muted)}
+  .more-body{display:flex;flex-direction:column;gap:var(--space-4);padding-top:var(--space-2)}
+  .rated-first{display:flex;align-items:center;gap:var(--space-2);min-height:44px;font:500 15px/20px var(--font-sans);color:var(--ink);cursor:pointer}
+  .rated-first input{width:20px;height:20px;accent-color:var(--green)}
+  .stage-tag{color:var(--ink)}
+  .rated-tag{background:var(--green-tint)!important;color:var(--green)!important;border-color:transparent!important}
   .cat-sec{margin-bottom:var(--space-8);scroll-margin-top:var(--space-4)}
   .cat-head{display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-3)}
   .cat-head .ico{width:24px;height:24px;color:var(--cat)}
@@ -384,9 +409,10 @@ function mfForgetUser(){ try{ localStorage.removeItem("matchfit_lastuser"); }cat
 
   <header>
     <h1>Drill library</h1>
-    <p class="lede">Every drill Match Fit builds sessions from, by age range and category. Use Add to a session on any drill to put it at the end of an upcoming planned session.</p>
+    <p class="lede">Every drill Match Fit builds sessions from, by age range and category. Use Add to a session on any drill to add it to an upcoming planned session, in its place before the game.</p>
   </header>
 
+  <aside class="lib-side">
   <div class="toolbar">
     <div class="control-group">
       <p class="control-label">Age range</p>
@@ -406,17 +432,39 @@ function mfForgetUser(){ try{ localStorage.removeItem("matchfit_lastuser"); }cat
       </div>
     </div>
     <div class="control-group">
-      <label class="control-label" for="libSource">Source</label>
-      <select id="libSource" class="lib-select"><option value="any">All sources</option></select>
+      <p class="control-label" id="catLabel">Category</p>
+      <div class="pill-row chips" id="catFilter" role="group" aria-labelledby="catLabel"></div>
     </div>
+    <div class="control-group">
+      <p class="control-label" id="skillLabel">Skill</p>
+      <div class="pill-row chips" id="skillFilter" role="group" aria-labelledby="skillLabel"></div>
+    </div>
+    <details class="more-filters" id="moreFilters">
+      <summary>More filters<span class="more-on" id="moreOn"></span></summary>
+      <div class="more-body">
+        <div class="control-group" id="stageGroup">
+          <p class="control-label" id="stageLabel">Stage</p>
+          <div class="pill-row chips" id="stageFilter" role="group" aria-labelledby="stageLabel"></div>
+        </div>
+        <div class="control-group">
+          <p class="control-label" id="lenLabel">Length</p>
+          <div class="pill-row chips" id="lenFilter" role="group" aria-labelledby="lenLabel"></div>
+        </div>
+        <div class="control-group">
+          <label class="control-label" for="libSource">Source</label>
+          <select id="libSource" class="lib-select"><option value="any">All sources</option></select>
+        </div>
+        <label class="rated-first"><input type="checkbox" id="ratedFirst"> Put drills rated well by coaches first</label>
+      </div>
+    </details>
     <div class="search-wrap">
       <span class="ico" data-icon="search"></span>
       <input type="search" id="libSearch" placeholder="Search drills, e.g. solo, wall ball, overhead" aria-label="Search drills">
     </div>
   </div>
 
-  <p class="lib-count" id="libCount"></p>
-  <nav class="jump" id="libJump" aria-label="Jump to category"></nav>
+  <div class="lib-count-row"><p class="lib-count" id="libCount" role="status"></p><button class="btn-quiet" type="button" id="libClear" hidden>Clear filters</button></div>
+  </aside>
 
   <div id="liveCategories">
     <div class="lib-banner">Loading drill library…</div>
@@ -568,7 +616,13 @@ const LIB_CATEGORY_LABEL = { warmup:"Warm-up", passing:"Passing & Striking", tac
                               attacking:"Attacking & Shooting", possession:"Possession & Pressing",
                               game:"Finishing Game", skillgame:"Skill Game", teamgame:"Team Game" };
 let libraryRowsByMode = null;
-const view = { mode:"core", code:"any", q:"", source:"any" };
+const view = { mode:"core", code:"any", q:"", source:"any", cats:new Set(), skills:new Set(), stages:new Set(), len:"any", ratedFirst:false };
+// Skills match the skills in Record a game, so the Library, a session's focus and game results use the same words.
+const LIB_SKILLS = [["handpass","Hand passing"],["striking","Striking","hurling"],["kicking","Kicking","football"],["solo","Soloing & carrying"],
+  ["shooting","Shooting"],["tackling","Tackling"],["catching","Catching & first touch"],["possession","Possession"],["movement","Movement & agility"]];
+const LIB_STAGES = [["0","Controlled"],["1","Moving"],["2","Under pressure"]];
+const LIB_LENGTHS = [["any","Any"],["short","Up to 8 min"],["mid","10 min"],["long","15 min +"]];
+let ratingsGood = {};   // drill id -> number of "Good" (4 or 5) ratings from coaches
 let sourceListMode = null;
 
 function codeTag(code){
@@ -615,6 +669,10 @@ async function fetchAndRenderLiveLibrary(){
         if(libraryRowsByMode[row.mode]) libraryRowsByMode[row.mode].push(row);
       });
       Object.values(libraryRowsByMode).forEach(list => list.sort((a,b) => String(a.name).localeCompare(String(b.name))));
+      try{
+        const rr = await sb.from("drill_ratings").select("drill_id, rating");
+        (rr.data || []).forEach(r => { if(r.rating >= 4) ratingsGood[r.drill_id] = (ratingsGood[r.drill_id] || 0) + 1; });
+      }catch(e){ /* ratings are a nice-to-have; the list works without them */ }
     } catch(err){
       container.innerHTML = '<div class="lib-banner err" role="alert">' + ico("alert") + '<span>Couldn\'t load the drill library (' +
         escapeHtml(err.message || String(err)) +
@@ -625,11 +683,45 @@ async function fetchAndRenderLiveLibrary(){
   renderLibrary();
 }
 
+function lenBucket(m){ return m <= 8 ? "short" : m <= 12 ? "mid" : "long"; }
+// One test per filter group; within a group any choice matches, across groups they all must.
+const LIB_TESTS = {
+  source: d => view.source === "any" || d.source === view.source,
+  code:   d => view.code === "any" || d.code === view.code || d.code === "both",
+  q:      d => { const q = view.q.toLowerCase(); return !q || String(d.name).toLowerCase().includes(q) || String(d.description).toLowerCase().includes(q) || (d.theme || []).join(" ").toLowerCase().includes(q); },
+  cats:   d => !view.cats.size || view.cats.has(d.category),
+  skills: d => !view.skills.size || (d.theme || []).some(t => view.skills.has(t)),
+  stages: d => !view.stages.size || view.stages.has(String(d.level)),
+  len:    d => view.len === "any" || lenBucket(d.duration_minutes) === view.len
+};
+function libMatch(d, except){ return Object.keys(LIB_TESTS).every(k => k === except || LIB_TESTS[k](d)); }
+function libFiltersOn(){ return view.cats.size + view.skills.size + view.stages.size + (view.len !== "any") + (view.source !== "any") + (view.q ? 1 : 0); }
+function chipHtml(attr, value, label, n, on, icon){
+  return `<button class="pill${on ? " active" : ""}" type="button" ${attr}="${escapeHtml(value)}" aria-pressed="${on}"${n === 0 && !on ? " disabled" : ""}>${icon ? ico(icon) : ""}${escapeHtml(label)}${n != null ? ` <span class="n">${n}</span>` : ""}</button>`;
+}
+function renderFacets(all){
+  const order = (LIB_CATEGORY_ORDER[view.mode] || []);
+  const cats = order.concat([...new Set(all.map(d => d.category))].filter(c => !order.includes(c)));
+  const cBase = all.filter(d => libMatch(d, "cats"));
+  document.getElementById("catFilter").innerHTML = cats.filter(c => all.some(d => d.category === c))
+    .map(c => chipHtml("data-cat", c, LIB_CATEGORY_LABEL[c] || c, cBase.filter(d => d.category === c).length, view.cats.has(c), CAT_ICON[c] || "game")).join("");
+  const sBase = all.filter(d => libMatch(d, "skills"));
+  const skills = LIB_SKILLS.filter(([k, , code]) => all.some(d => (d.theme || []).includes(k)) && !(code && view.code !== "any" && view.code !== code));
+  view.skills.forEach(k => { if(!skills.some(x => x[0] === k)) view.skills.delete(k); });
+  document.getElementById("skillFilter").innerHTML = skills.map(([k, label]) => chipHtml("data-skill", k, label, sBase.filter(d => (d.theme || []).includes(k)).length, view.skills.has(k))).join("");
+  const staged = all.some(d => d.level === 0 || d.level === 1 || d.level === 2);
+  document.getElementById("stageGroup").hidden = !staged;
+  if(!staged) view.stages.clear();
+  const gBase = all.filter(d => libMatch(d, "stages"));
+  document.getElementById("stageFilter").innerHTML = staged ? LIB_STAGES.map(([k, label]) => chipHtml("data-stage", k, label, gBase.filter(d => String(d.level) === k).length, view.stages.has(k))).join("") : "";
+  const lBase = all.filter(d => libMatch(d, "len"));
+  document.getElementById("lenFilter").innerHTML = LIB_LENGTHS.map(([k, label]) => chipHtml("data-len", k, label, k === "any" ? null : lBase.filter(d => lenBucket(d.duration_minutes) === k).length, view.len === k)).join("");
+  const more = view.stages.size + (view.len !== "any") + (view.source !== "any") + (view.ratedFirst ? 1 : 0);
+  document.getElementById("moreOn").textContent = more ? `(${more} on)` : "";
+}
 function renderLibrary(){
   const container = document.getElementById("liveCategories");
-  const jump = document.getElementById("libJump");
   const all = libraryRowsByMode[view.mode] || [];
-  const q = view.q.toLowerCase();
   // Source list for this age range; rebuilt only when the age range changes, so the dropdown keeps its focus.
   const srcSel = document.getElementById("libSource");
   if(srcSel && sourceListMode !== view.mode){
@@ -639,28 +731,25 @@ function renderLibrary(){
     if(!srcs.includes(view.source)) view.source = "any";
     srcSel.value = view.source;
   }
-  const rows = all.filter(d =>
-    (view.source === "any" || d.source === view.source) &&
-    (view.code === "any" || d.code === view.code || d.code === "both") &&
-    (!q || String(d.name).toLowerCase().includes(q) || String(d.description).toLowerCase().includes(q) || (d.theme || []).join(" ").toLowerCase().includes(q)));
-  const withDiagram = rows.filter(d => d.diagram).length;
-  document.getElementById("libCount").textContent = rows.length === all.length
-    ? `${all.length} drills · ${withDiagram} with a diagram`
-    : `${rows.length} of ${all.length} drills · ${withDiagram} with a diagram`;
+  renderFacets(all);
+  const rows = all.filter(d => libMatch(d));
+  if(view.ratedFirst) rows.sort((a, b) => (ratingsGood[b.id] || 0) - (ratingsGood[a.id] || 0) || String(a.name).localeCompare(String(b.name)));
+  const on = libFiltersOn();
+  document.getElementById("libCount").textContent = on ? `${rows.length} of ${all.length} drills match` : `${all.length} drills`;
+  document.getElementById("libClear").hidden = !on;
   if(rows.length === 0){
-    jump.innerHTML = "";
-    container.innerHTML = '<div class="empty-state">No drills match. Try Either for code, or a shorter search.</div>';
+    container.innerHTML = '<div class="empty-state"><p>No drills match all of these filters.</p><button class="btn" type="button" data-clear>Clear filters</button></div>';
+    container.querySelector("[data-clear]").addEventListener("click", clearLibFilters);
     return;
   }
   const byCat = {};
   rows.forEach(r => { (byCat[r.category] = byCat[r.category] || []).push(r); });
   const catOrder = (LIB_CATEGORY_ORDER[view.mode] || []).concat(Object.keys(byCat).filter(c => !(LIB_CATEGORY_ORDER[view.mode] || []).includes(c)));
-  let html = "", jl = "";
+  let html = "";
   catOrder.forEach(cat => {
     const list = byCat[cat];
     if(!list || list.length === 0) return;
     const label = escapeHtml(LIB_CATEGORY_LABEL[cat] || cat);
-    jl += `<a class="c-${cat}" href="#cat-${cat}">${ico(CAT_ICON[cat] || "game")}${label}</a>`;
     html += `<section class="cat-sec c-${cat}" id="cat-${cat}">
       <div class="cat-head">${ico(CAT_ICON[cat] || "game")}<h2>${label}</h2><span class="cat-count">${list.length}</span></div>
       ${list.map(d => `
@@ -670,6 +759,9 @@ function renderLibrary(){
           <div class="slot-meta">
             ${codeTag(d.code)}
             ${d.age && d.age !== "both" ? `<span class="tag">${escapeHtml(d.age.toUpperCase())}</span>` : ""}
+            ${(d.level === 0 || d.level === 1 || d.level === 2) ? `<span class="tag stage-tag">${LIB_STAGES[d.level][1]}</span>` : ""}
+            ${(d.theme || []).filter(t => LIB_SKILLS.some(x => x[0] === t)).map(t => `<span class="tag">${escapeHtml(LIB_SKILLS.find(x => x[0] === t)[1])}</span>`).join("")}
+            ${ratingsGood[d.id] ? `<span class="tag rated-tag">${ico("star")}Rated well ×${ratingsGood[d.id]}</span>` : ""}
             <span class="players-tag">${ico("players")}${d.min_players}+</span>
             ${d.equipment && d.equipment.length ? `<span class="equipment-tag">${ico("equipment")}${escapeHtml(d.equipment.join(", "))}</span>` : ""}
           </div>
@@ -679,7 +771,6 @@ function renderLibrary(){
         </article>`).join("")}
     </section>`;
   });
-  jump.innerHTML = jl;
   container.innerHTML = html;
   const byId = {}; rows.forEach(r => byId[r.id] = r);
   container.querySelectorAll("[data-diagram]").forEach(btn => btn.addEventListener("click", () => {
@@ -712,7 +803,7 @@ async function openAddToSession(drillId){
   const d = findLibraryDrill(drillId); if(!d) return;
   addSessDrillId = drillId;
   document.getElementById("addSessTitle").textContent = "Add to a session";
-  setAddSessNote(d.name + " goes at the end of the session you pick.");
+  setAddSessNote(d.name + " goes into the session you pick, in its place before the game.");
   const list = document.getElementById("addSessList");
   list.innerHTML = '<p class="sheet-note">Loading your upcoming sessions…</p>';
   document.getElementById("addSessBackdrop").classList.add("open");
@@ -737,7 +828,11 @@ async function addToSession(sid){
   if(cur.status !== "planned" || !cur.session_date || cur.session_date < localIsoDate()){ setAddSessNote("That session is no longer an upcoming planned session, so nothing was added."); return; }
   const slots = (cur.slots || []).slice();
   if(slots.some(x => x.drill && x.drill.id === d.id)){ setAddSessNote("That drill is already in " + (cur.title || "that session") + "."); return; }
-  slots.push({ cat: d.category, drill: drillForSession(d) });
+  // In its place in the session's shape (warm-up, skills, game), so the game stays last.
+  const ORDER = ["warmup","passing","tackling","attacking","possession","game","skillgame","teamgame"];
+  const rank = c => { const young = ["warmup","skillgame","teamgame"]; const i = (young.indexOf(c) >= 0 && c !== "warmup") ? young.indexOf(c) + 10 : ORDER.indexOf(c); return i < 0 ? 99 : i; };
+  let at = slots.length; while(at > 0 && rank(slots[at - 1].cat) > rank(d.category)) at--;
+  slots.splice(at, 0, { cat: d.category, drill: drillForSession(d) });
   // Only writes if nobody has saved the session since we read it.
   const { data, error } = await sb.from("sessions").update({ slots, last_edited_by: coachForEdit() }).eq("id", sid).eq("updated_at", cur.updated_at).select();
   if(error){ setAddSessNote("Couldn't add it: " + (error.message || error)); return; }
@@ -762,6 +857,24 @@ function wireFilter(rowId, attr, key){
   });
 }
 wireFilter("libModeTabs", "data-mode", "mode");
+// Categories and stages belong to an age range, so changing it starts them fresh; skills carry over where they exist.
+document.getElementById("libModeTabs").addEventListener("click", () => { view.cats.clear(); view.stages.clear(); if(libraryRowsByMode) renderLibrary(); });
+function toggleIn(set, v){ if(set.has(v)) set.delete(v); else set.add(v); }
+document.querySelector(".toolbar").addEventListener("click", e => {
+  const b = e.target.closest("[data-cat],[data-skill],[data-stage],[data-len]"); if(!b || b.disabled) return;
+  if(b.dataset.cat) toggleIn(view.cats, b.dataset.cat);
+  else if(b.dataset.skill) toggleIn(view.skills, b.dataset.skill);
+  else if(b.dataset.stage) toggleIn(view.stages, b.dataset.stage);
+  else view.len = b.dataset.len;
+  if(libraryRowsByMode) renderLibrary();
+});
+document.getElementById("ratedFirst").addEventListener("change", e => { view.ratedFirst = e.target.checked; if(libraryRowsByMode) renderLibrary(); });
+function clearLibFilters(){
+  view.cats.clear(); view.skills.clear(); view.stages.clear(); view.len = "any"; view.source = "any"; view.q = "";
+  document.getElementById("libSource").value = "any"; document.getElementById("libSearch").value = "";
+  if(libraryRowsByMode) renderLibrary();
+}
+document.getElementById("libClear").addEventListener("click", clearLibFilters);
 wireFilter("codeFilter", "data-code", "code");
 document.getElementById("libSource").addEventListener("change", e => { view.source = e.target.value; if(libraryRowsByMode) renderLibrary(); });
 let searchTimer = null;

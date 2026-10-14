@@ -1345,13 +1345,13 @@ const CATEGORY_ORDER = ["warmup","passing","tackling","attacking","possession","
 
 const THEMES = [
   {value:"any",       label:"Any"},
-  {value:"handpass",  label:"Hand Passing"},
+  {value:"handpass",  label:"Hand passing"},
   {value:"kicking",   label:"Kicking"},
   {value:"striking",  label:"Striking"},
-  {value:"solo",      label:"Soloing"},
+  {value:"solo",      label:"Soloing & carrying"},
   {value:"shooting",  label:"Shooting"},
   {value:"tackling",  label:"Tackling"},
-  {value:"catching",  label:"Catching"},
+  {value:"catching",  label:"Catching & first touch"},
   {value:"possession",label:"Possession"}
 ];
 
@@ -1574,6 +1574,15 @@ function activeDB(){
   return DB;
 }
 function activeCatOrder(){ return (mode === "core" || mode === "teen") ? CATEGORY_ORDER : YOUNG_CATEGORY_ORDER; }
+// Add a drill in its place in the session's shape (warm-up, skills, game), not at the end, so the game stays last.
+// Walks back over any trailing drills that belong later and slots in before them; a coach's own reordering is kept.
+function slotOrderIndex(cat){ const o = activeCatOrder(), i = o.indexOf(cat); return i < 0 ? o.length - 1 : i; }
+function insertSlotInOrder(slot){
+  const k = slotOrderIndex(slot.cat);
+  let at = sessionSlots.length;
+  while(at > 0 && slotOrderIndex(sessionSlots[at - 1].cat) > k) at--;
+  sessionSlots.splice(at, 0, slot);
+}
 function activeSlotMeta(){ return (mode === "core" || mode === "teen") ? SLOT_META : YOUNG_SLOT_META; }
 function libCount(){ return Object.values(activeDB()).reduce((sum, arr) => sum + arr.length, 0); }
 
@@ -1808,7 +1817,7 @@ function removeSlot(id){
 function addDrillToSession(cat, name){
   const drill = activeDB()[cat].find(d => d.name === name);
   if(!drill) return;
-  sessionSlots.push({ id: freshId(), cat, drill });
+  insertSlotInOrder({ id: freshId(), cat, drill });
   lastSkippedCategories = []; trimResultMsg = "";
   render();
 }
@@ -1873,7 +1882,7 @@ function fitSessionToRange(minTarget, maxTarget){
     const freshCandidates = candidates.filter(c => !recentIds.has(c.drill.id) && !sessionSlots.some(x => x.drill.id && x.drill.id === c.drill.id));
     if(freshCandidates.length > 0) candidates = freshCandidates;
     const pick = candidates[Math.floor(Math.random() * candidates.length)];
-    sessionSlots.push({ id: freshId(), cat: pick.cat, drill: pick.drill });
+    insertSlotInOrder({ id: freshId(), cat: pick.cat, drill: pick.drill });
     total += pick.drill.dur;
   }
 
@@ -2178,7 +2187,7 @@ document.getElementById("customDrillSubmit").addEventListener("click", async () 
     btn.disabled = false;
     toast("Saved to the library.");
   }
-  sessionSlots.push({ id: freshId(), cat, drill });
+  insertSlotInOrder({ id: freshId(), cat, drill });
   lastSkippedCategories = []; trimResultMsg = "";
   closeCustomDrill();
   render();
