@@ -94,26 +94,95 @@ function mfForgetUser(){ try{ localStorage.removeItem("matchfit_lastuser"); loca
   .topbar-actions{display:flex;align-items:center;gap:var(--space-1)}
   .authbar{display:flex;align-items:center;gap:var(--space-1);font-size:14px;color:var(--ink-muted);min-width:0}
   .authbar .who{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:22ch}
-  .tour-card .modal-head{margin-bottom:var(--space-3)}
-  /* Tour hero: a strip of pitch that moves along one step per card, with the step's icon on top */
-  .tour-hero{position:relative;height:104px;margin-bottom:var(--space-4);border-radius:var(--radius-md);background:var(--green-tint);overflow:hidden;color:var(--green)}
-  .tour-pitch{position:absolute;top:0;left:0;width:640px;height:104px;opacity:.28;transition:transform .45s cubic-bezier(.2,.7,.2,1)}
-  .tour-ico{position:absolute;left:var(--space-4);top:50%;display:flex;align-items:center;justify-content:center;width:56px;height:56px;margin-top:-28px;border-radius:var(--radius-pill);background:var(--surface);color:var(--green);box-shadow:0 0 0 4px var(--green-tint),0 0 0 5px color-mix(in srgb,var(--green) 30%,transparent)}
-  .tour-ico .ico{width:28px;height:28px}
-  .tour-title{margin:0 0 var(--space-2);font:700 24px/28px var(--font-display);color:var(--ink);text-wrap:balance}
-  .tour-body{margin:0 0 var(--space-4);font:400 16px/24px var(--font-sans);color:var(--ink);min-height:120px}
-  .tour-film{margin:calc(-1 * var(--space-2)) 0 var(--space-4)}
+  /* Tour: each card opens on a live miniature of the real screen, on the deep pitch green from the film.
+     Fixed colours inside the hero so it reads the same in light and dark mode, like a phone screen. */
+  .modal-card.tour-card{position:relative;padding-top:0;overflow:hidden}
+  .tour-hero{--hb:#0E3B24;--hp:#FFFFFF;--hi:#101B15;--hm:#5D6B63;--hg:#12663A;--ht:#DDEDE3;--hr:#B3242B;--hrt:#F8E0DE;--ha:#B86A00;
+    position:relative;height:208px;margin:0 calc(-1 * var(--space-4)) var(--space-5);background:var(--hb);overflow:hidden;color:var(--hi)}
+  @media (min-width:600px){.tour-hero{border-radius:var(--radius-md) var(--radius-md) 0 0}}
+  .tour-hero .th-lines{position:absolute;inset:0;width:100%;height:100%;stroke:rgba(255,255,255,.13);fill:none;stroke-width:1.5}
+  .tour-close{position:absolute;top:var(--space-2);right:var(--space-2);z-index:2;color:#fff}
+  .tour-close:hover{background:rgba(255,255,255,.12)}
+  .th{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:var(--space-3) var(--space-4)}
+  @media (max-width:439px){.th{padding-right:52px}}  /* keep the mini screen clear of the close button on phones */
+  .th-card{width:100%;min-width:0;max-width:272px;background:var(--hp);border-radius:var(--radius-md);box-shadow:0 10px 28px rgba(0,0,0,.35);padding:var(--space-3);font:500 13px/16px var(--font-sans);color:var(--hi)}
+  .th-head{display:flex;align-items:center;justify-content:space-between;gap:var(--space-2);margin-bottom:6px;font:700 15px/18px var(--font-display);letter-spacing:.01em}
+  .th-head small{font:600 11px/14px var(--font-sans);color:var(--hm)}
+  .th-tag{padding:2px 7px;border-radius:var(--radius-pill);background:var(--ht);color:var(--hg);font:700 10px/14px var(--font-display);letter-spacing:.06em;text-transform:uppercase}
+  /* Plan: the drills slot in, coloured by part of the session */
+  .th-row{display:grid;grid-template-columns:4px 1fr auto;gap:var(--space-2);align-items:center;padding:3px 0;border-top:1px solid #E3E8E4}
+  .th-row:first-of-type{border-top:0}
+  .th-row i{align-self:stretch;border-radius:2px;background:var(--c)}
+  .th-row > span{min-width:0}
+  .th-row b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .th-row small{display:block;color:var(--hm);font-size:11px;line-height:13px}
+  .th-row em{font-style:normal;color:var(--hm);font-size:12px}
+  /* Run: the clock counts down under the drill bar */
+  .th-run .th-card{text-align:center}
+  .th-bar{display:flex;gap:3px;margin-bottom:var(--space-2)}
+  .th-bar i{flex:1;height:5px;border-radius:3px;background:#DCE3DE}
+  .th-bar i.done{background:var(--hg)}
+  .th-bar i.now{background:var(--hg);opacity:.45}
+  .th-drill{font:700 16px/20px var(--font-display)}
+  .th-clock{font:700 52px/54px var(--font-display);letter-spacing:.01em;font-variant-numeric:tabular-nums;color:var(--hi)}
+  .th-sub{color:var(--hm);font-size:12px}
+  /* Record: a tap lands and its count goes up */
+  .th-taps{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-2)}
+  .th-tap{position:relative;overflow:hidden;border-radius:var(--radius-sm);padding:8px 6px;text-align:center;font:600 11px/13px var(--font-sans);border:1.5px solid}
+  .th-tap.good{background:var(--ht);border-color:var(--hg);color:var(--hg)}
+  .th-tap.poor{background:var(--hrt);border-color:var(--hr);color:var(--hr)}
+  .th-tap b{display:block;font:700 26px/28px var(--font-display);color:var(--hi)}
+  .th-coaches{display:flex;align-items:center;gap:6px;margin-top:var(--space-2);color:var(--hm);font-size:12px}
+  .th-live{width:8px;height:8px;border-radius:50%;background:var(--hr)}
+  /* Review: bars per skill against the 65% line */
+  .th-skill{display:grid;grid-template-columns:84px 1fr 32px;white-space:nowrap;gap:var(--space-2);align-items:center;font-size:12px;line-height:20px}
+  .th-track{position:relative;height:8px;border-radius:4px;background:#E3E8E4}
+  .th-track::after{content:"";position:absolute;left:65%;top:-4px;bottom:-4px;border-left:1.5px dashed var(--hm)}
+  .th-fill{height:100%;border-radius:4px;background:var(--hg);width:var(--w);transform-origin:left}
+  .th-fill.low{background:var(--ha)}
+  .th-skill span:last-child{text-align:right;font-weight:600}
+  .th-focus{margin-top:6px;font-weight:600;color:var(--hg)}
+  /* Plan ahead: the coming nights fill in, shared by every coach */
+  .th-night{display:grid;grid-template-columns:auto 1fr auto;gap:var(--space-2);align-items:center;padding:4px 0;border-top:1px solid #E3E8E4}
+  .th-night:first-of-type{border-top:0}
+  .th-night b{font:700 14px/16px var(--font-display);min-width:68px}
+  .th-night span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .th-night span{color:var(--hm);font-size:12px}
+  .th-night i{width:10px;height:10px;border-radius:50%;border:2px solid var(--hg)}
+  .th-faces{display:flex;align-items:center;margin-top:var(--space-2);font-size:12px;color:var(--hm)}
+  .th-faces u{text-decoration:none;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin-right:-5px;border-radius:50%;border:2px solid var(--hp);background:var(--hg);color:#fff;font:700 10px/1 var(--font-sans)}
+  .th-faces u:last-of-type{margin-right:8px}
+  /* One entrance per card */
+  .tour-go .th-card{animation:thCard .4s cubic-bezier(.2,.8,.3,1) both}
+  .tour-go .th-row,.tour-go .th-night{animation:thIn .35s ease-out both;animation-delay:calc(.18s + var(--d) * .1s)}
+  .tour-go .th-fill{animation:thGrow .7s cubic-bezier(.2,.8,.3,1) both;animation-delay:calc(.25s + var(--d) * .1s)}
+  .tour-go .th-tap.hit::after{content:"";position:absolute;left:50%;top:50%;width:12px;height:12px;margin:-6px;border-radius:50%;background:var(--hg);opacity:0;animation:thRipple .6s ease-out .55s both}
+  .th-tap b.bump{animation:thBump .3s ease-out}
+  .tour-go .th-live{animation:thPulse 1.4s ease-in-out infinite}
+  @keyframes thCard{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
+  @keyframes thIn{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:none}}
+  @keyframes thGrow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+  @keyframes thRipple{0%{opacity:.35;transform:scale(1)}100%{opacity:0;transform:scale(12)}}
+  @keyframes thBump{50%{transform:scale(1.25)}}
+  @keyframes thPulse{50%{opacity:.25}}
+  @media (prefers-reduced-motion:reduce){.tour-go .th-card,.tour-go .th-row,.tour-go .th-night,.tour-go .th-fill,.tour-go .th-tap.hit::after,.th-tap b.bump,.tour-go .th-live{animation:none}}
+  /* Text: every card's text is stacked in one grid cell, so the card is always the height of the longest and the buttons never move */
+  .tour-text{display:grid;margin-bottom:var(--space-4)}
+  .tour-text > *{grid-area:1 / 1}
+  .tour-sizer{visibility:hidden}
+  .tour-title{margin:0 0 var(--space-2);font:700 26px/30px var(--font-display);color:var(--ink)}
+  .tour-body{margin:0;font:400 16px/24px var(--font-sans);color:var(--ink)}
+  .tour-film{margin:var(--space-3) 0 0}
   .tour-film[hidden]{display:none}
-  .tour-anim .tour-ico{animation:tourPop .32s cubic-bezier(.2,.8,.3,1.2) both}
-  .tour-anim .tour-title,.tour-anim .tour-body{animation:tourIn .26s ease-out both}
-  .tour-anim .tour-body{animation-delay:.04s}
-  @keyframes tourPop{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:none}}
+  .tour-go .tour-live{animation:tourIn .26s ease-out both}
   @keyframes tourIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-  .tour-dots{display:flex;gap:var(--space-2);margin-bottom:var(--space-5)}
+  @media (prefers-reduced-motion:reduce){.tour-go .tour-live{animation:none}}
+  .tour-foot{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-4)}
+  .tour-dots{display:flex;gap:var(--space-2)}
   .tour-dots span{width:8px;height:8px;border-radius:var(--radius-pill);background:var(--line-strong);transition:width .25s ease,background-color .25s ease}
-  .tour-dots span.on{background:var(--green);width:20px}
+  .tour-dots span.on{background:var(--green);width:22px}
   .tour-dots span.past{background:var(--green)}
-  @media (prefers-reduced-motion:reduce){.tour-anim .tour-ico,.tour-anim .tour-title,.tour-anim .tour-body{animation:none}}
+  .tour-step{margin:0;font:500 14px/20px var(--font-sans);color:var(--ink-muted)}
   /* Film sheet: the short film, loaded only when a coach taps play */
   #filmBackdrop{z-index:60}
   .film-card{max-width:420px}
@@ -125,7 +194,12 @@ function mfForgetUser(){ try{ localStorage.removeItem("matchfit_lastuser"); loca
   .login-film{align-self:center;white-space:nowrap}
   .tour-actions{display:flex;justify-content:space-between;align-items:center;gap:var(--space-3)}
   .tour-actions .btn{min-width:120px}
-  .tour-actions .btn-quiet[hidden]{display:inline-flex;visibility:hidden}
+  .tour-actions .is-ghost{visibility:hidden}
+  .run-skips h2{margin-bottom:var(--space-2)}
+  .run-skip-row{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);padding:var(--space-2) 0;border-top:1px solid var(--hairline)}
+  .run-skip-row:first-of-type{border-top:0}
+  .run-skip-row small{color:var(--ink-muted);font-size:14px}
+  .run-skip-row .btn{flex:none;min-height:44px}
   .ai-tag{display:inline-block;vertical-align:middle;margin-left:var(--space-2);padding:2px 8px;border-radius:var(--radius-pill);background:var(--green-tint);color:var(--green);font:700 12px/16px var(--font-display);letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
   .profile-btn{position:relative}
   .count-badge{position:absolute;top:4px;right:2px;min-width:18px;height:18px;padding:0 5px;border-radius:var(--radius-pill);background:var(--green);color:var(--on-green);font:700 12px/18px var(--font-sans);text-align:center}
@@ -520,6 +594,8 @@ function mfForgetUser(){ try{ localStorage.removeItem("matchfit_lastuser"); loca
   .gm-sum{margin:var(--space-3) 0}
   .gm-sumrow{display:flex;justify-content:space-between;gap:var(--space-3);margin:0;padding:var(--space-2) 0;border-top:1px solid var(--hairline);font-size:15px}
   .gm-sumrow small{color:var(--ink-muted)}
+  .btn-quiet.gm-delete{margin-top:var(--space-6);color:var(--red)}
+  .btn-quiet.gm-delete .ico{color:var(--red)}
   .gm-list{display:flex;flex-direction:column;gap:var(--space-2);margin-top:var(--space-4)}
   .lvl-pick{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-2);margin:0 0 var(--space-2)}
   .lvl-opt{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-height:64px;padding:var(--space-2) var(--space-3);border:1px solid var(--hairline);border-radius:var(--radius-md);background:var(--surface);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
@@ -625,6 +701,12 @@ function mfForgetUser(){ try{ localStorage.removeItem("matchfit_lastuser"); loca
   .login-sub{margin:0;font-size:15px;line-height:22px;color:var(--ink-muted)}
   .login-field{display:flex;flex-direction:column;gap:6px}
   .login-card .login-msg{margin:0}
+  .generate-btn.secondary{background:transparent;color:var(--green);border:1.5px solid var(--green);min-height:44px;font-size:15px}
+  .login-code{display:flex;flex-direction:column;gap:var(--space-3)}
+  .login-code[hidden]{display:none}
+  .login-code input{font:600 22px/28px var(--font-mono);letter-spacing:.2em;text-align:center}
+  .login-code .btn-quiet{align-self:center}
+  .login-code input::placeholder{font:400 16px/24px var(--font-sans);letter-spacing:0}
 
   @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 .offline-note{position:sticky;top:0;z-index:36;background:var(--amber-tint);color:var(--amber);font-size:14px;line-height:1.35;padding:8px 16px;text-align:center}
@@ -642,7 +724,15 @@ function mfForgetUser(){ try{ localStorage.removeItem("matchfit_lastuser"); loca
     </div>
     <button class="generate-btn" id="loginSendBtn"><span class="ico" data-icon="mail"></span>Email me a sign-in link</button>
     <p class="login-msg" id="loginMsg"></p>
-    <button class="btn-quiet login-film" type="button" data-film><span class="ico" data-icon="play"></span>Watch the film (79 sec)</button>
+    <div class="login-code" id="loginCodeBox" hidden>
+      <div class="login-field">
+        <label for="loginCode">Code from the email</label>
+        <input type="text" id="loginCode" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="8" placeholder="Code from the email">
+      </div>
+      <button class="generate-btn" id="loginCodeBtn"><span class="ico" data-icon="check"></span>Sign in with code</button>
+      <button class="btn-quiet" type="button" id="loginRestart">Use a different email</button>
+    </div>
+    <button class="btn-quiet login-film" type="button" data-film><span class="ico" data-icon="play"></span>Watch the short film</button>
   </div>
 </div>
 
@@ -650,7 +740,7 @@ function mfForgetUser(){ try{ localStorage.removeItem("matchfit_lastuser"); loca
 <div class="modal-backdrop" id="filmBackdrop" role="dialog" aria-modal="true" aria-labelledby="filmTitle">
   <div class="modal-card film-card">
     <div class="modal-head">
-      <h3 id="filmTitle">Match Fit in 79 seconds</h3>
+      <h3 id="filmTitle">Match Fit in action</h3>
       <button class="modal-close" id="filmClose" aria-label="Close the film"><span class="ico" data-icon="remove"></span></button>
     </div>
     <div class="film-frame">
@@ -1033,24 +1123,17 @@ function mfForgetUser(){ try{ localStorage.removeItem("matchfit_lastuser"); loca
 </div>
 <div class="modal-backdrop" id="tourBackdrop" role="dialog" aria-modal="true" aria-labelledby="tourTitle">
   <div class="modal-card tour-card">
-    <div class="modal-head">
-      <p class="eyebrow" id="tourStep"></p>
-      <button class="modal-close" id="tourClose" aria-label="Close the tour"><span class="ico" data-icon="remove"></span></button>
+    <div class="tour-hero" id="tourHero" aria-hidden="true"></div>
+    <button class="modal-close tour-close" id="tourClose" aria-label="Close the tour"><span class="ico" data-icon="remove"></span></button>
+    <div class="tour-text">
+      <div class="tour-sizer" id="tourSizer" aria-hidden="true"></div>
+      <div class="tour-live">
+        <h3 class="tour-title" id="tourTitle"></h3>
+        <p class="tour-body" id="tourBody"></p>
+        <p class="tour-film" id="tourFilm" hidden><button class="btn-quiet" type="button" data-film><span class="ico" data-icon="play"></span>Watch the short film</button></p>
+      </div>
     </div>
-    <div class="tour-hero" aria-hidden="true">
-      <svg class="tour-pitch" id="tourPitch" viewBox="0 0 640 104" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="8" y="8" width="624" height="88" rx="2"/>
-        <path d="M44 8v88M68 8v88M150 8v88M320 8v88M490 8v88M572 8v88M596 8v88"/>
-        <path d="M8 40h14v24H8M632 40h-14v24h14"/>
-        <path d="M68 38a14 14 0 0 1 0 28M572 38a14 14 0 0 0 0 28"/>
-        <path d="M312 52h16"/>
-      </svg>
-      <div class="tour-ico" id="tourIco"></div>
-    </div>
-    <h3 class="tour-title" id="tourTitle"></h3>
-    <p class="tour-body" id="tourBody"></p>
-    <p class="tour-film" id="tourFilm" hidden><button class="btn-quiet" type="button" data-film><span class="ico" data-icon="play"></span>Watch the 79-second film</button></p>
-    <div class="tour-dots" id="tourDots" aria-hidden="true"></div>
+    <div class="tour-foot"><div class="tour-dots" id="tourDots" aria-hidden="true"></div><p class="tour-step" id="tourStep"></p></div>
     <div class="tour-actions">
       <button class="btn-quiet" id="tourBack">Back</button>
       <button class="btn" id="tourNext">Next</button>
@@ -2789,10 +2872,12 @@ function showApp(user){
 function showLogin(){
   document.getElementById("appRoot").style.display = "none";
   document.getElementById("loginScreen").style.display = "flex";
+  showCodeBox(false);
 }
 
 let libraryLoadedOnce = false;
 async function onSignedIn(user){
+  loginPendingClear();
   showApp(user);
   await loadTeamRows();
   if(coachProfile && coachProfile.default_team && TEAM_LABEL[coachProfile.default_team] && sessionSlots.length === 0){
@@ -2846,14 +2931,56 @@ document.getElementById("loginSendBtn").addEventListener("click", async () => {
   }
   msg.className = "login-msg";
   msg.textContent = "Sending…";
-  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.href } });
+  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.href.split("#")[0] } });
   if(error){
     msg.className = "login-msg err";
     msg.textContent = "Could not send link: " + error.message;
   } else {
-    msg.className = "login-msg ok";
-    msg.textContent = "Check your email. The link signs you in on this device.";
+    loginPending(email);
+    showCodeBox(true);
   }
+});
+// Sign in with the code from the email. On iPhone a home-screen app doesn't see a sign-in made in Safari,
+// so typing the code here signs this app in. The email is remembered for an hour in case the phone reloads the page.
+const LOGIN_PENDING = "matchfit_login_pending";
+function loginPending(email){ try{ localStorage.setItem(LOGIN_PENDING, JSON.stringify({ email, at: Date.now() })); }catch(e){} }
+function loginPendingGet(){ try{ const v = JSON.parse(localStorage.getItem(LOGIN_PENDING) || "null"); return v && Date.now() - v.at < 3600 * 1000 ? v : null; }catch(e){ return null; } }
+function loginPendingClear(){ try{ localStorage.removeItem(LOGIN_PENDING); }catch(e){} }
+function showCodeBox(focus){
+  const p = loginPendingGet(); if(!p) return;
+  const msg = document.getElementById("loginMsg");
+  document.getElementById("loginEmail").value = p.email;
+  msg.className = "login-msg ok";
+  msg.textContent = "Check your email for " + p.email + ". Tap the link on this phone, or type the code from the email here.";
+  document.getElementById("loginCodeBox").hidden = false;
+  document.getElementById("loginSendBtn").innerHTML = ico("mail") + "Send a new link and code";
+  document.getElementById("loginSendBtn").classList.add("secondary");
+  if(focus) setTimeout(() => document.getElementById("loginCode").focus(), 50);
+}
+async function signInWithCode(){
+  const p = loginPendingGet(), msg = document.getElementById("loginMsg");
+  const email = (p && p.email) || document.getElementById("loginEmail").value.trim();
+  const token = document.getElementById("loginCode").value.replace(/\D/g, "");
+  if(token.length < 6){ msg.className = "login-msg err"; msg.textContent = "Type the whole code from the email."; return; }
+  const btn = document.getElementById("loginCodeBtn"); btn.disabled = true;
+  msg.className = "login-msg"; msg.textContent = "Signing in…";
+  const { error } = await sb.auth.verifyOtp({ email, token, type: "email" });
+  btn.disabled = false;
+  if(error){
+    msg.className = "login-msg err";
+    msg.textContent = /expired|invalid/i.test(error.message) ? "That code didn't work or has expired. Check it, or send a new one." : "Could not sign in: " + error.message;
+    return;
+  }
+  loginPendingClear();
+}
+document.getElementById("loginCodeBtn").addEventListener("click", signInWithCode);
+document.getElementById("loginCode").addEventListener("keydown", e => { if(e.key === "Enter") signInWithCode(); });
+document.getElementById("loginRestart").addEventListener("click", () => {
+  loginPendingClear();
+  document.getElementById("loginCodeBox").hidden = true; document.getElementById("loginCode").value = "";
+  const b = document.getElementById("loginSendBtn"); b.innerHTML = ico("mail") + "Email me a sign-in link"; b.classList.remove("secondary");
+  const m = document.getElementById("loginMsg"); m.className = "login-msg"; m.textContent = "";
+  document.getElementById("loginEmail").value = ""; document.getElementById("loginEmail").focus();
 });
 
 // ---- Live drill data ----
@@ -3359,8 +3486,8 @@ function renderLogDrills(){
   el.innerHTML = sessionSlots.map((sl, i) => {
     const st = logState[i] || {};
     return `<div class="log-drill${st.skipped ? " skipped" : ""}"><h4>${escapeHtml(sl.drill.name)}</h4><div class="log-drill-row">
-      <button class="pill${st.fb === "good" ? " active" : ""}" data-log="good" data-i="${i}"${sl.drill.id && !st.skipped ? "" : " disabled"}>Good</button>
-      <button class="pill${st.fb === "poor" ? " active" : ""}" data-log="poor" data-i="${i}"${sl.drill.id && !st.skipped ? "" : " disabled"}>Poor</button>
+      <button class="pill${st.fb === "good" ? " active" : ""}" data-log="good" data-i="${i}"${sl.drill.id ? "" : " disabled"}>Good</button>
+      <button class="pill${st.fb === "poor" ? " active" : ""}" data-log="poor" data-i="${i}"${sl.drill.id ? "" : " disabled"}>Poor</button>
       <button class="pill${st.skipped ? " active" : ""}" data-log="skip" data-i="${i}">Skipped</button>
     </div></div>`;
   }).join("");
@@ -3372,7 +3499,7 @@ document.getElementById("logDrills").addEventListener("click", e => {
   const i = +b.dataset.i, a = b.dataset.log, st = logState[i] = logState[i] || {};
   if(a === "ran") st.skipped = false;
   else if(a === "skip"){ st.skipped = !st.skipped; if(st.skipped) st.fb = null; }
-  else st.fb = st.fb === a ? null : a;
+  else { st.fb = st.fb === a ? null : a; if(st.fb) st.skipped = false; } // rating a drill means it ran
   renderLogDrills();
 });
 function openLogRunModal(opts){
@@ -3588,21 +3715,60 @@ const TOUR_STEPS = [
   { icon: "log", title: "Review", body: "After training, rate each drill. It takes about thirty seconds. Whenever you like, tap “Review a block” for an AI-assisted summary of what you recorded, with a suggested focus." },
   { icon: "calendar", title: "Plan ahead", body: "Tap “Plan a block of sessions” to set up several weeks at once. What you recorded shapes it: weak skills get more time, drills that didn't work come up less. Every coach on the team sees the same Schedule." }
 ];
-let tourIdx = 0;
+let tourIdx = 0, tourTimer = null;
+const TOUR_LINES = '<svg class="th-lines" viewBox="0 0 400 200" preserveAspectRatio="none"><rect x="12" y="12" width="376" height="176" rx="2"/><path d="M200 12v176M40 12v176M360 12v176M110 12v176M290 12v176"/><path d="M12 82h14v36H12M388 82h-14v36h14"/><circle cx="200" cy="100" r="18"/></svg>';
+function tourNights(){
+  // The next four Wednesday and Friday nights from today
+  const out = [], d = new Date(); d.setHours(12, 0, 0, 0);
+  while(out.length < 4){ d.setDate(d.getDate() + 1); if(d.getDay() === 3 || d.getDay() === 5) out.push(d.toLocaleDateString("en-IE", { weekday:"short", day:"numeric", month:"short" }).replace(",", "")); }
+  return out;
+}
+function tourScene(i){
+  if(i === 0) return `<div class="th th-plan"><div class="th-card"><div class="th-head">Build a session <span class="th-tag">U11 hurling</span></div>
+    ${[["#B86A00","Jab lift race","Warm-up","8"],["#1D6BB0","Striking in pairs","Skill: striking","10"],["#A13A2E","Hook and block pairs","Skill: tackling","10"],["#38443D","Small-sided game","Game","15"]]
+      .map((r, k) => `<div class="th-row" style="--c:${r[0]};--d:${k}"><i></i><span><b>${r[1]}</b><small>${r[2]}</small></span><em>${r[3]} min</em></div>`).join("")}</div></div>`;
+  if(i === 1) return `<div class="th th-run"><div class="th-card"><div class="th-bar"><i class="done"></i><i class="now"></i><i></i><i></i><i></i></div>
+    <div class="th-drill">Striking in pairs</div><div class="th-clock" id="thClock">8:00</div><div class="th-sub">Next: Hook and block pairs</div></div></div>`;
+  if(i === 2) return `<div class="th th-record"><div class="th-card"><div class="th-head">U11 hurling v Rovers <small>Striking</small></div>
+    <div class="th-taps"><div class="th-tap good hit"><b id="thCount">7</b>Struck it well</div><div class="th-tap poor"><b>3</b>Missed or mis-hit</div></div>
+    <div class="th-coaches"><span class="th-live"></span>2 coaches tapping</div></div></div>`;
+  if(i === 3) return `<div class="th th-review"><div class="th-card"><div class="th-head">Review a block <span class="th-tag">AI-assisted</span></div>
+    ${[["Hand passing",82],["Striking",73],["Shooting",67],["Tackling",33]].map((r, k) => `<div class="th-skill"><span>${r[0]}</span><div class="th-track"><div class="th-fill${r[1] < 65 ? " low" : ""}" style="--w:${r[1]}%;--d:${k}"></div></div><span>${r[1]}%</span></div>`).join("")}
+    <div class="th-focus">Suggested focus: tackling</div></div></div>`;
+  const n = tourNights(), what = ["Tackling", "Striking", "Tackling", "Match prep"];
+  return `<div class="th th-ahead"><div class="th-card"><div class="th-head">Schedule <small>Next 2 weeks</small></div>
+    ${n.map((x, k) => `<div class="th-night" style="--d:${k}"><b>${x}</b><span>7pm, ${what[k].toLowerCase()}</span><i></i></div>`).join("")}
+    <div class="th-faces"><u>D</u><u>T</u><u>T</u><u>E</u>Shared with every coach</div></div></div>`;
+}
+function tourStopTimers(){ clearInterval(tourTimer); tourTimer = null; }
+function tourStartTimers(){
+  tourStopTimers();
+  const still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if(tourIdx === 1 && !still){
+    let t = 480; const c = document.getElementById("thClock");
+    tourTimer = setInterval(() => { t--; if(c) c.textContent = Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0"); }, 1000);
+  }
+  if(tourIdx === 2){
+    const go = () => { const c = document.getElementById("thCount"); if(c){ c.textContent = "8"; c.classList.add("bump"); } };
+    if(still) go(); else tourTimer = setTimeout(go, 750);
+  }
+}
 function renderTour(){
   const s = TOUR_STEPS[tourIdx], last = tourIdx === TOUR_STEPS.length - 1;
   document.getElementById("tourStep").textContent = (tourIdx + 1) + " of " + TOUR_STEPS.length;
-  document.getElementById("tourIco").innerHTML = ico(s.icon);
+  document.getElementById("tourHero").innerHTML = TOUR_LINES + tourScene(tourIdx);
   document.getElementById("tourTitle").textContent = s.title;
   document.getElementById("tourBody").textContent = s.body;
   document.getElementById("tourFilm").hidden = !last;
+  // Invisible copy of every card's text in the same grid cell, so the card keeps the height of the longest one.
+  document.getElementById("tourSizer").innerHTML = TOUR_STEPS.map((x, i) => `<div style="grid-area:1/1"><h3 class="tour-title">${escapeHtml(x.title)}</h3><p class="tour-body">${escapeHtml(x.body)}</p>${i === TOUR_STEPS.length - 1 ? '<p class="tour-film"><button class="btn-quiet" tabindex="-1">Watch the short film</button></p>' : ""}</div>`).join("");
+  document.getElementById("tourSizer").style.display = "grid";
   document.getElementById("tourDots").innerHTML = TOUR_STEPS.map((x, i) => `<span${i === tourIdx ? ' class="on"' : i < tourIdx ? ' class="past"' : ""}></span>`).join("");
-  document.getElementById("tourBack").hidden = tourIdx === 0;
+  const back = document.getElementById("tourBack");
+  back.classList.toggle("is-ghost", tourIdx === 0); back.disabled = tourIdx === 0; back.setAttribute("aria-hidden", tourIdx === 0 ? "true" : "false");
   document.getElementById("tourNext").textContent = last ? "Done" : "Next";
-  // The pitch strip moves one step along per card; the icon and text ease in.
-  const hero = document.querySelector(".tour-hero"), w = hero.clientWidth || 340;
-  document.getElementById("tourPitch").style.transform = `translateX(${-Math.round((640 - w) * tourIdx / (TOUR_STEPS.length - 1))}px)`;
-  const card = document.querySelector(".tour-card"); card.classList.remove("tour-anim"); void card.offsetWidth; card.classList.add("tour-anim");
+  const card = document.querySelector(".tour-card"); card.classList.remove("tour-go"); void card.offsetWidth; card.classList.add("tour-go");
+  tourStartTimers();
 }
 function tourSeen(){
   if(coachProfile && coachProfile.tour_seen_at) return true;
@@ -3622,7 +3788,7 @@ function openTour(){
   markTourSeen(); // shown once: seeing it counts, however it is closed
   setTimeout(() => document.getElementById("tourNext").focus(), 50);
 }
-function closeTour(){ document.getElementById("tourBackdrop").classList.remove("open"); }
+function closeTour(){ tourStopTimers(); document.getElementById("tourBackdrop").classList.remove("open"); }
 // First sign-in: after the first-run card. Later sign-ins: once, if nothing else is open.
 function maybeOpenTour(){
   if(tourSeen()) return;
@@ -3697,7 +3863,7 @@ function profileRowsHtml(){
       <div class="prof-form"><select id="ownerTeam">${Object.keys(TEAM_LABEL).map(t => `<option value="${t}">${TEAM_LABEL[t]}</option>`).join("")}</select>
       <input type="email" id="ownerEmail" placeholder="coach@example.com" class="players-input"><button class="btn" id="ownerAdd">Make admin</button></div>`;
   }
-  h += `<h4 class="prof-h">Help</h4><p class="sheet-note">A short tour of planning, running, recording and reviewing, or the 79-second film.</p><p class="hero-links"><button class="btn-quiet" type="button" data-tour>${ico("info")}How to use Match Fit</button><button class="btn-quiet" type="button" data-film>${ico("play")}Watch the film</button></p>`;
+  h += `<h4 class="prof-h">Help</h4><p class="sheet-note">A short tour of planning, running, recording and reviewing, or a short film of Match Fit in action.</p><p class="hero-links"><button class="btn-quiet" type="button" data-tour>${ico("info")}How to use Match Fit</button><button class="btn-quiet" type="button" data-film>${ico("play")}Watch the film</button></p>`;
   h += `<h4 class="prof-h">Feedback</h4><p class="sheet-note">Tell Damien what works, what doesn't, or what's missing.</p><button class="btn-quiet" id="fbOpen">${ico("message")}Send feedback</button>`;
   return h;
 }
@@ -4056,6 +4222,35 @@ function gmWire(){
   const nw = document.getElementById("gmNew"); if(nw) nw.onclick = gmRenderNew;
   el.querySelectorAll("[data-game]").forEach(b => b.onclick = () => { const g = gm.list.find(x => x.id === b.dataset.game); if(g) gmEnter(g); });
 }
+// Any coach on the team can delete a game (the same rule as sessions): for a game started by mistake or on the wrong team.
+async function gmDelete(){
+  const g = gm.cur; if(!g) return;
+  const taps = gmAll().length;
+  const c = await askChoice({
+    title: "Delete this game?",
+    text: gmGameTitle(g) + ". " + (taps
+      ? taps + (taps === 1 ? " tap is" : " taps are") + " recorded. They'll be deleted for every coach, and the game will stop counting towards what to work on."
+      : "Nothing has been recorded in it yet."),
+    options: [{ label: taps ? "Delete game and taps" : "Delete game", value: "go", primary: true }, { label: "Keep it", value: "no" }]
+  });
+  if(c !== "go" || !gm.cur || gm.cur.id !== g.id) return;
+  clearInterval(gm.poll);
+  try{
+    const ev = await sb.from("game_events").delete().eq("game_id", g.id);
+    if(ev && ev.error) throw ev.error;
+    const gr = await sb.from("games").delete().eq("id", g.id);
+    if(gr && gr.error) throw gr.error;
+  }catch(e){
+    toast("Could not delete the game. Check your signal and try again.");
+    gm.poll = setInterval(() => { if(document.hidden || document.getElementById("gameView").hidden) return; gmPull(); gmFlush(); }, 4000);
+    return;
+  }
+  gmSaveQueue(gmQueue().filter(x => x.game_id !== g.id)); // drop any taps still waiting to send for it
+  gm.cur = null;
+  toast("Game deleted.");
+  if(typeof refreshGamesHint === "function") refreshGamesHint();
+  openGames();
+}
 function closeGames(){
   clearInterval(gm.poll); gm.cur = null;
   document.getElementById("gameView").hidden = true;
@@ -4120,11 +4315,13 @@ async function gmEnter(g){
     }).join("")}</div>
     <button class="btn-quiet" id="gmUndo">Undo my last tap</button>
     <details class="gm-sum"><summary>What this says so far</summary><div id="gmSum"></div></details>
-    <div class="custom-field"><label for="gmResult">Final score (optional)</label><input type="text" id="gmResult" value="${escapeHtml(g.result || "")}" placeholder="e.g. 2-14 to 1-10"></div>`);
+    <div class="custom-field"><label for="gmResult">Final score (optional)</label><input type="text" id="gmResult" value="${escapeHtml(g.result || "")}" placeholder="e.g. 2-14 to 1-10"></div>
+    <button class="btn-quiet gm-delete" id="gmDelete">${ico("remove")}Delete this game</button>`);
   gmWire();
   const el = document.getElementById("gameView");
   el.querySelectorAll("[data-tap]").forEach(b => b.onclick = () => { const p = b.dataset.tap.split(":"); gmTap(p[0], p[1], p[2]); });
   document.getElementById("gmUndo").onclick = gmUndo;
+  document.getElementById("gmDelete").onclick = gmDelete;
   document.getElementById("gmResult").onchange = async e => {
     const v = e.target.value.trim() || null;
     try{ await sb.from("games").update({ result: v, last_edited_by: getCoachName() }).eq("id", g.id); g.result = v; }catch(err){ toast("Could not save the score. Check your signal."); }
@@ -5020,8 +5217,9 @@ function saveRun(){
   try{
     if(!run || run.finished){ localStorage.removeItem(RUN_KEY); return; }
     localStorage.setItem(RUN_KEY, JSON.stringify({
-      items: run.items.map(x => ({ cat:x.cat, name:x.name, desc:x.desc, dur:x.dur, equipment:x.equipment, skipped:x.skipped, done:x.done })),
-      i: run.i, running: run.running, remaining: runRemaining(), savedAt: Date.now(), startedAt: run.startedAt, sessionId: run.sessionId
+      items: run.items.map(x => ({ cat:x.cat, name:x.name, desc:x.desc, dur:x.dur, equipment:x.equipment, skipped:x.skipped, done:x.done, short:!!x.short, added:x.added || 0 })),
+      i: run.i, running: run.running, remaining: runRemaining(), savedAt: Date.now(), startedAt: run.startedAt, sessionId: run.sessionId,
+      catchUp: !!run.catchUp, endedEarly: !!run.endedEarly
     }));
   }catch(e){}
 }
@@ -5046,20 +5244,25 @@ function runPause(){
 }
 function runGo(newIndex, ended){
   const cur = run.items[run.i];
-  if(ended) cur.done = true; else cur.skipped = true;
+  // Next always counts the drill as run: sessions often move on early. Moving on before the time is up marks it "cut short".
+  // A coach who didn't really run it marks it Skipped in the review.
+  cur.done = true; if(!ended) cur.short = true;
+  // A skipped drill run at the end goes back to the end screen, where any others still skipped are listed.
+  if(run.catchUp){ run.catchUp = false; runFinish(); return; }
   if(newIndex >= run.items.length){ runFinish(); return; }
   run.i = newIndex; run.remaining = run.items[newIndex].dur * 60;
   if(run.running) run.endAt = Date.now() + run.remaining * 1000;
   renderRun(); saveRun();
 }
 function runBack(){
-  if(run.i === 0) return;
-  run.i--; const it = run.items[run.i]; it.skipped = false; it.done = false;
+  if(run.i === 0 || run.catchUp) return;
+  run.i--; const it = run.items[run.i]; it.skipped = false; it.done = false; it.short = false; it.added = 0;
   run.remaining = it.dur * 60;
   if(run.running) run.endAt = Date.now() + run.remaining * 1000;
   renderRun(); saveRun();
 }
 function runAddMinute(){
+  const it = run.items[run.i]; it.added = (it.added || 0) + 60;
   if(run.running) run.endAt += 60000; else run.remaining += 60;
   updateRunClock(); saveRun();
 }
@@ -5074,6 +5277,13 @@ function updateRunClock(){
   t.textContent = fmtClock(rem);
   t.classList.toggle("low", rem <= 30);
   const e = document.getElementById("runEnd"); if(e) e.textContent = runEndText();
+}
+// From the end screen: run a drill that was skipped earlier, then come back to the end.
+function runCatchUp(k){
+  const it = run && run.items[k]; if(!it || !it.skipped) return;
+  it.skipped = false; it.done = false; it.short = false; it.added = 0;
+  run.finished = false; run.catchUp = true; run.i = k; run.remaining = it.dur * 60;
+  runPlay();
 }
 function runFinish(){
   run.finished = true; run.running = false; clearInterval(runTicker); unlockScreen();
@@ -5112,9 +5322,12 @@ function renderRun(){
   if(run.finished){
     const skipped = run.items.filter(x => x.skipped).map(x => x.name);
     const mins = Math.round((Date.now() - run.startedAt) / 60000);
+    const skipRows = run.items.map((x, k) => x.skipped ? `<div class="run-skip-row"><span><b>${escapeHtml(x.name)}</b><br><small>${x.dur} min</small></span><button class="btn" data-catchup="${k}">${ico("timer")}Run it now</button></div>` : "").join("");
     el.innerHTML = `<div class="run-in run-done">
       <h1>Session complete</h1>
-      <p class="run-sub">${run.endedEarly ? "Finished early. " : ""}${run.items.length - skipped.length} of ${run.items.length} drills ran in full, about ${mins} min on the clock.${skipped.length ? (run.endedEarly ? " Not run: " : " Skipped: ") + escapeHtml(skipped.join(", ")) + "." : ""}</p>
+      <p class="run-sub">${run.endedEarly ? "Finished early. " : ""}${(() => { const ran = run.items.length - skipped.length, cut = run.items.filter(x => x.short).length;
+        return ran + " of " + run.items.length + " drills ran" + (cut ? " (" + cut + " cut short)" : ran === run.items.length ? " in full" : ""); })()}, about ${mins} min on the clock.</p>
+      ${skipRows ? `<div class="run-card run-skips"><h2>${run.endedEarly ? "Not run" : "Skipped"}</h2>${skipRows}</div>` : ""}
       <button class="generate-btn" id="runLogBtn">${ico("log")}Rate or review this session</button>
       <button class="btn" id="runBackBtn">Back to the session</button>
     </div>`;
@@ -5123,26 +5336,31 @@ function renderRun(){
       openLogRunModal(run.items.length === sessionSlots.length ? { skipped: idx } : undefined);
     });
     document.getElementById("runBackBtn").addEventListener("click", closeRun);
+    el.querySelectorAll("[data-catchup]").forEach(b => b.addEventListener("click", () => runCatchUp(+b.dataset.catchup)));
     el.scrollTop = 0; return;
   }
-  const it = run.items[run.i], next = run.items[run.i + 1];
+  const it = run.items[run.i], next = run.catchUp ? null : run.items[run.i + 1];
   const slot = sessionSlots[run.i];
+  const skippedLeft = run.items.filter((x, k) => x.skipped && k !== run.i).length;
+  const subTail = next ? ". Next: " + escapeHtml(next.name) + " (" + next.dur + " min)"
+    : run.catchUp ? ". Skipped earlier. Back to the end after this"
+    : skippedLeft ? ". Last drill. You can run skipped drills after this" : ". Last drill";
   const diagram = it.diagram || (slot && slot.drill.name === it.name ? slot.drill.diagram : "") || "";
   const meta = (activeSlotMeta()[it.cat] || SLOT_META[it.cat] || {}).label || "";
   const kit = (it.equipment || []).filter(Boolean);
   el.innerHTML = `<div class="run-in">
     <div class="run-top">
       <button class="run-x" data-run="exit" aria-label="Leave Run it">${ico("remove")}</button>
-      <div><p class="run-step">Drill ${run.i + 1} of ${run.items.length}${meta ? " · " + escapeHtml(meta) : ""}</p><p class="run-end" id="runEnd"></p></div>
+      <div><p class="run-step">Drill ${run.i + 1} of ${run.items.length}${meta ? " · " + escapeHtml(meta) : ""}${run.catchUp ? " · Catch-up" : ""}</p><p class="run-end" id="runEnd"></p></div>
     </div>
     <div class="run-bar" aria-hidden="true">${run.items.map((x, k) => `<i class="${k === run.i ? "now" : x.skipped ? "skip" : x.done ? "done" : ""}"></i>`).join("")}</div>
     <h1 class="run-name">${escapeHtml(it.name)}</h1>
     <div class="run-time" id="runTime" role="timer" aria-live="off"></div>
-    <p class="run-sub">${it.dur} min planned${next ? ". Next: " + escapeHtml(next.name) + " (" + next.dur + " min)" : ". Last drill"}</p>
+    <p class="run-sub">${it.dur} min planned${subTail}</p>
     <div class="run-controls">
-      <button data-run="back"${run.i === 0 ? " disabled" : ""}><span style="display:inline-flex;transform:rotate(-90deg)">${ico("move-up")}</span>Back</button>
+      <button data-run="back"${run.i === 0 || run.catchUp ? " disabled" : ""}><span style="display:inline-flex;transform:rotate(-90deg)">${ico("move-up")}</span>Back</button>
       <button class="main" data-run="toggle">${ico("timer")}${run.running ? "Pause" : "Start"}</button>
-      <button data-run="skip"><span style="display:inline-flex;transform:rotate(-90deg)">${ico("move-down")}</span>${next ? "Skip" : "Finish"}</button>
+      <button data-run="skip"><span style="display:inline-flex;transform:rotate(-90deg)">${ico("move-down")}</span><span id="runSkipLabel">${next ? "Next" : "Finish"}</span></button>
     </div>
     <div class="run-aux"><button data-run="plus">+1 min</button>${next ? '<button data-run="early">Finish early</button>' : ""}<button data-run="beep">Test the beep</button></div>
     <div class="run-card"><h2>In short</h2><p>${escapeHtml(drillCue(it.desc))}</p>${(it.desc || "").length > drillCue(it.desc).length + 10 ? `<details class="run-more"><summary>Full description</summary><p>${escapeHtml(it.desc)}</p></details>` : ""}</div>
@@ -5172,7 +5390,7 @@ async function maybeResumeRun(){
   const c = await askChoice({ title: "Pick up your session run?", text: "You were part way through drill " + (saved.i + 1) + " of " + saved.items.length + ".", options: [{ label: "Resume", value: "go", primary: true }, { label: "Discard", value: "no" }] });
   if(c !== "go"){ try{ localStorage.removeItem(RUN_KEY); }catch(e){} return false; }
   const lost = saved.running ? (Date.now() - saved.savedAt) / 1000 : 0;
-  run = { items: saved.items.map(x => Object.assign({ diagram:"" }, x)), i: saved.i, running:false, remaining: Math.max(1, saved.remaining - lost), endAt:0, finished:false, startedAt: saved.startedAt, sessionId: saved.sessionId };
+  run = { items: saved.items.map(x => Object.assign({ diagram:"" }, x)), i: saved.i, running:false, remaining: Math.max(1, saved.remaining - lost), endAt:0, finished:false, startedAt: saved.startedAt, sessionId: saved.sessionId, catchUp: !!saved.catchUp, endedEarly: !!saved.endedEarly };
   document.getElementById("runView").hidden = false;
   document.body.classList.add("run-open");
   renderRun();
