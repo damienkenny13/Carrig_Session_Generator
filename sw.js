@@ -3,7 +3,7 @@
    - Fonts and the Supabase script: cached after first use.
    - Supabase data (sessions, drills, games) is NOT cached here. The one offline copy kept on the device is the next planned session, saved by the app itself in localStorage and removed once its date has passed.
    Nothing is written to Supabase from here. Bump VER to force a refresh of everything. */
-const VER = "v8";
+const VER = "v9";
 const SHELL = "matchfit-shell-" + VER;
 const FILES = ["./", "index.html", "session-block-library.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 const SCRIPT = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js";

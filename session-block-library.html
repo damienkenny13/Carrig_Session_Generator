@@ -94,7 +94,9 @@ function mfForgetUser(){ try{ localStorage.removeItem("matchfit_lastuser"); }cat
     .wrap{display:grid;grid-template-columns:320px minmax(0,1fr);column-gap:var(--space-8);align-items:start}
     .wrap > .topbar,.wrap > header,.wrap > .reference{grid-column:1 / -1}
     /* Filters, count and the category menu stay together in the left column and stay in view while the drills scroll */
-    .wrap > .lib-side{grid-column:1;grid-row:3;position:sticky;top:calc(52px + var(--space-4));max-height:calc(100vh - 52px - var(--space-8));overflow-y:auto;overscroll-behavior:contain}
+    .wrap > .lib-side{grid-column:1;grid-row:3;position:sticky;top:calc(52px + var(--space-4));max-height:calc(100vh - 52px - var(--space-8));overflow-y:auto;overscroll-behavior:auto;overflow-anchor:none;-webkit-overflow-scrolling:touch}
+    /* iPad Safari: 100vh is taller than the visible screen, so use the dynamic height where the browser has it. */
+    @supports (height:100dvh){ .wrap > .lib-side{max-height:calc(100dvh - 52px - var(--space-8))} }
     .wrap > #liveCategories{grid-column:2;grid-row:3;min-width:0}
     #liveCategories .cat-sec{scroll-margin-top:calc(52px + var(--space-4))}
     /* Wide screens: the category menu (used most) sits first in the panel, then the filters */

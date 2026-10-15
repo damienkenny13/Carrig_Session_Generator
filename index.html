@@ -1711,9 +1711,7 @@ let blockAvoid = null; // while planning a block: drills already used earlier in
 let blockStage = null; // while planning a block: 0 controlled, 1 moving, 2 under pressure
 function setEmptyNote(slots){
   if(slots.length){ emptyNote = ""; return; }
-  emptyNote = (mode === "teen" && state.code === "hurling")
-    ? "There are no 13–18 hurling drills yet, only football. Switch Code to Football or Either."
-    : "No drills match these filters. Try fewer players, or Either for code.";
+  emptyNote = "No drills match these filters. Try fewer players, or Either for code.";
 }
 
 function pickFrom(pool, avoidName, useTheme, cat){
@@ -4688,7 +4686,7 @@ async function buildBlock(){
   if(!dates.length) return fail("No training nights fall in that period.");
   blockDraft = planBlockSessions(v.team, v.code, v.focus, dates, v.season);
   if(blockDraft.every(r => r.empty)){
-    return fail(v.team === "teen" && v.code === "hurling" ? "There are no 13–18 hurling drills yet. Try Football." : "No drills match this team and code.");
+    return fail("No drills match this team and code.");
   }
   await blockMarkClashes(v.team);
   document.getElementById("blockSetup").style.display = "none";
