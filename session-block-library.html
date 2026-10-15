@@ -428,7 +428,7 @@ function mfForgetUser(){ try{ localStorage.removeItem("matchfit_lastuser"); }cat
 
   <header>
     <h1>Drill library</h1>
-    <p class="lede">Every drill Match Fit builds sessions from, by age range and category. Use Add to a session on any drill to add it to an upcoming planned session, in its place before the game.</p>
+    <p class="lede">Every drill Match Fit builds sessions from. Tap a drill to see it in full, or add it to an upcoming session.</p>
   </header>
 
   <aside class="lib-side">
@@ -438,9 +438,13 @@ function mfForgetUser(){ try{ localStorage.removeItem("matchfit_lastuser"); }cat
       <div class="pill-row" id="libModeTabs">
         <button class="pill" data-mode="u67">U6–7</button>
         <button class="pill" data-mode="u89">U8–9</button>
-        <button class="pill active" data-mode="core">U10–12</button>
+        <button class="pill" data-mode="core">U10–12</button>
         <button class="pill" data-mode="teen">13–18</button>
       </div>
+    </div>
+    <div class="control-group" id="suitsGroup">
+      <p class="control-label" id="suitsLabel">Suits</p>
+      <div class="pill-row chips" id="suitsFilter" role="group" aria-labelledby="suitsLabel"></div>
     </div>
     <div class="control-group">
       <p class="control-label">Code</p>
@@ -635,7 +639,24 @@ const LIB_CATEGORY_LABEL = { warmup:"Warm-up", passing:"Passing & Striking", tac
                               attacking:"Attacking & Shooting", possession:"Possession & Pressing",
                               game:"Finishing Game", skillgame:"Skill Game", teamgame:"Team Game" };
 let libraryRowsByMode = null;
-const view = { mode:"core", code:"any", q:"", source:"any", cats:new Set(), skills:new Set(), stages:new Set(), len:"any", ratedFirst:false };
+// Ages: a drill suits its own age and every older age in its range (a U10 drill suits U11 and U12), the same rule the generator uses.
+const AGE_RANK = { u6:0, u7:1, u8:2, u9:3, u10:4, u11:5, u12:6, u16:7 };
+const RANGE_AGES = { u67:["u6","u7"], u89:["u8","u9"], core:["u10","u11","u12"], teen:[] };
+const RANGE_LABEL = { u67:"U6–7", u89:"U8–9", core:"U10–12", teen:"13–18" };
+function ageSuits(drillAge, teamAge){
+  if(!teamAge || teamAge === "any" || teamAge === "both" || !drillAge || drillAge === "both") return true;
+  const a = AGE_RANK[drillAge], t = AGE_RANK[teamAge];
+  return (a == null || t == null) ? drillAge === teamAge : a <= t;
+}
+function ageLabel(age, rangeMode){
+  const ages = RANGE_AGES[rangeMode] || [];
+  if(!age || age === "both" || rangeMode === "teen") return RANGE_LABEL[rangeMode] || "";
+  const top = ages[ages.length - 1];
+  return !top || age === top || ages.indexOf(age) < 0 ? age.toUpperCase() : age.toUpperCase() + "–" + top.replace(/^u/, "");
+}
+function teamRange(t){ return ({ u6:"u67", u7:"u67", u8:"u89", u9:"u89", u10:"core", u11:"core", u12:"core", teen:"teen" })[t] || null; }
+let savedTeam = null; try{ savedTeam = localStorage.getItem("matchfit_team"); }catch(e){}
+const view = { mode: teamRange(savedTeam) || "core", suits: (teamRange(savedTeam) && teamRange(savedTeam) !== "teen") ? savedTeam : "any", code:"any", q:"", source:"any", cats:new Set(), skills:new Set(), stages:new Set(), len:"any", ratedFirst:false };
 // Skills match the skills in Record a game, so the Library, a session's focus and game results use the same words.
 const LIB_SKILLS = [["handpass","Hand passing"],["striking","Striking","hurling"],["kicking","Kicking","football"],["solo","Soloing & carrying"],
   ["shooting","Shooting"],["tackling","Tackling"],["catching","Catching & first touch"],["possession","Possession"],["movement","Movement & agility"]];
@@ -706,6 +727,7 @@ function lenBucket(m){ return m <= 8 ? "short" : m <= 12 ? "mid" : "long"; }
 // One test per filter group; within a group any choice matches, across groups they all must.
 const LIB_TESTS = {
   source: d => view.source === "any" || d.source === view.source,
+  suits:  d => ageSuits(d.age, view.suits),
   code:   d => view.code === "any" || d.code === view.code || d.code === "both",
   q:      d => { const q = view.q.toLowerCase(); return !q || String(d.name).toLowerCase().includes(q) || String(d.description).toLowerCase().includes(q) || (d.theme || []).join(" ").toLowerCase().includes(q); },
   cats:   d => !view.cats.size || view.cats.has(d.category),
@@ -714,11 +736,17 @@ const LIB_TESTS = {
   len:    d => view.len === "any" || lenBucket(d.duration_minutes) === view.len
 };
 function libMatch(d, except){ return Object.keys(LIB_TESTS).every(k => k === except || LIB_TESTS[k](d)); }
-function libFiltersOn(){ return view.cats.size + view.skills.size + view.stages.size + (view.len !== "any") + (view.source !== "any") + (view.q ? 1 : 0); }
+function libFiltersOn(){ return (view.suits !== "any") + view.cats.size + view.skills.size + view.stages.size + (view.len !== "any") + (view.source !== "any") + (view.q ? 1 : 0); }
 function chipHtml(attr, value, label, n, on, icon){
   return `<button class="pill${on ? " active" : ""}" type="button" ${attr}="${escapeHtml(value)}" aria-pressed="${on}"${n === 0 && !on ? " disabled" : ""}>${icon ? ico(icon) : ""}${escapeHtml(label)}${n != null ? ` <span class="n">${n}</span>` : ""}</button>`;
 }
 function renderFacets(all){
+  const ages = RANGE_AGES[view.mode] || [];
+  if(view.suits !== "any" && !ages.includes(view.suits)) view.suits = "any";
+  document.getElementById("suitsGroup").hidden = !ages.length;
+  const aBase = all.filter(d => libMatch(d, "suits"));
+  document.getElementById("suitsFilter").innerHTML = ages.length ? [["any","Any age"]].concat(ages.map(a => [a, a.toUpperCase()]))
+    .map(([k, label]) => chipHtml("data-suits", k, label, k === "any" ? null : aBase.filter(d => ageSuits(d.age, k)).length, view.suits === k)).join("") : "";
   const order = (LIB_CATEGORY_ORDER[view.mode] || []);
   const cats = order.concat([...new Set(all.map(d => d.category))].filter(c => !order.includes(c)));
   const cBase = all.filter(d => libMatch(d, "cats"));
@@ -796,7 +824,7 @@ function renderLibrary(){
           <p class="drill-desc">${escapeHtml(d.description)}</p>
           <div class="slot-meta">
             ${codeTag(d.code)}
-            ${d.age && d.age !== "both" ? `<span class="tag">${escapeHtml(d.age.toUpperCase())}</span>` : ""}
+            ${view.mode !== "teen" ? `<span class="tag age-tag" title="Suits ${escapeHtml(ageLabel(d.age, view.mode))}">${escapeHtml(ageLabel(d.age, view.mode))}</span>` : ""}
             ${(d.level === 0 || d.level === 1 || d.level === 2) ? `<span class="tag stage-tag">${LIB_STAGES[d.level][1]}</span>` : ""}
             ${(d.theme || []).filter(t => LIB_SKILLS.some(x => x[0] === t)).map(t => `<span class="tag">${escapeHtml(LIB_SKILLS.find(x => x[0] === t)[1])}</span>`).join("")}
             ${ratingsGood[d.id] ? `<span class="tag rated-tag">${ico("star")}Rated well ×${ratingsGood[d.id]}</span>` : ""}
@@ -845,7 +873,7 @@ async function openAddToSession(drillId){
   const list = document.getElementById("addSessList");
   list.innerHTML = '<p class="sheet-note">Loading your upcoming sessions…</p>';
   document.getElementById("addSessBackdrop").classList.add("open");
-  const { data, error } = await sb.from("sessions").select("id,title,session_date,start_time,mode,status,slots,updated_at")
+  const { data, error } = await sb.from("sessions").select("id,title,session_date,start_time,mode,status,slots,updated_at,team")
     .eq("status", "planned").eq("mode", d.mode).gte("session_date", localIsoDate())
     .order("session_date", { ascending: true }).limit(50);
   if(addSessDrillId !== drillId) return;
@@ -853,8 +881,9 @@ async function openAddToSession(drillId){
   if(!data || !data.length){ list.innerHTML = ""; setAddSessNote("No upcoming planned sessions for this age range. Plan one in Build first."); return; }
   list.innerHTML = data.map(s => {
     const inIt = (s.slots || []).some(x => x.drill && x.drill.id === drillId);
+    const tooYoung = !inIt && s.team && AGE_RANK[s.team] != null && !ageSuits(d.age, s.team);
     const when = new Date(s.session_date + "T00:00").toLocaleDateString("en-IE", { weekday: "short", day: "numeric", month: "short" }) + (s.start_time ? " · " + String(s.start_time).slice(0, 5) : "");
-    return `<button class="add-sess-item" data-sid="${escapeHtml(s.id)}" ${inIt ? "disabled" : ""}><span>${escapeHtml(s.title || "Untitled session")}</span><small>${escapeHtml(when)}${inIt ? " · already in it" : ""}</small></button>`;
+    return `<button class="add-sess-item" data-sid="${escapeHtml(s.id)}" ${inIt || tooYoung ? "disabled" : ""}><span>${escapeHtml(s.title || "Untitled session")}</span><small>${escapeHtml(when)}${inIt ? " · already in it" : tooYoung ? " · this drill is for " + escapeHtml(ageLabel(d.age, d.mode)) : ""}</small></button>`;
   }).join("");
   list.querySelectorAll(".add-sess-item").forEach(b => b.addEventListener("click", () => addToSession(b.dataset.sid)));
 }
@@ -864,6 +893,7 @@ async function addToSession(sid){
   const { data: cur, error: readErr } = await sb.from("sessions").select("*").eq("id", sid).single();
   if(readErr || !cur){ setAddSessNote("Couldn't open that session. Try again."); return; }
   if(cur.status !== "planned" || !cur.session_date || cur.session_date < localIsoDate()){ setAddSessNote("That session is no longer an upcoming planned session, so nothing was added."); return; }
+  if(cur.team && AGE_RANK[cur.team] != null && !ageSuits(d.age, cur.team)){ setAddSessNote("This drill is written for " + ageLabel(d.age, d.mode) + ", so it wasn't added to a " + cur.team.toUpperCase() + " session."); return; }
   const slots = (cur.slots || []).slice();
   if(slots.some(x => x.drill && x.drill.id === d.id)){ setAddSessNote("That drill is already in " + (cur.title || "that session") + "."); return; }
   // In its place in the session's shape (warm-up, skills, game), so the game stays last.
@@ -894,13 +924,15 @@ function wireFilter(rowId, attr, key){
     });
   });
 }
+document.querySelectorAll("#libModeTabs .pill").forEach(b => b.classList.toggle("active", b.dataset.mode === view.mode));
 wireFilter("libModeTabs", "data-mode", "mode");
 // Categories and stages belong to an age range, so changing it starts them fresh; skills carry over where they exist.
-document.getElementById("libModeTabs").addEventListener("click", () => { view.cats.clear(); view.stages.clear(); if(libraryRowsByMode) renderLibrary(); });
+document.getElementById("libModeTabs").addEventListener("click", () => { view.cats.clear(); view.stages.clear(); view.suits = (savedTeam && teamRange(savedTeam) === view.mode && view.mode !== "teen") ? savedTeam : "any"; if(libraryRowsByMode) renderLibrary(); });
 function toggleIn(set, v){ if(set.has(v)) set.delete(v); else set.add(v); }
 document.querySelector(".toolbar").addEventListener("click", e => {
-  const b = e.target.closest("[data-cat],[data-skill],[data-stage],[data-len]"); if(!b || b.disabled) return;
-  if(b.dataset.cat) toggleIn(view.cats, b.dataset.cat);
+  const b = e.target.closest("[data-cat],[data-skill],[data-stage],[data-len],[data-suits]"); if(!b || b.disabled) return;
+  if(b.dataset.suits) view.suits = b.dataset.suits;
+  else if(b.dataset.cat) toggleIn(view.cats, b.dataset.cat);
   else if(b.dataset.skill) toggleIn(view.skills, b.dataset.skill);
   else if(b.dataset.stage) toggleIn(view.stages, b.dataset.stage);
   else view.len = b.dataset.len;
@@ -908,7 +940,7 @@ document.querySelector(".toolbar").addEventListener("click", e => {
 });
 document.getElementById("ratedFirst").addEventListener("change", e => { view.ratedFirst = e.target.checked; if(libraryRowsByMode) renderLibrary(); });
 function clearLibFilters(){
-  view.cats.clear(); view.skills.clear(); view.stages.clear(); view.len = "any"; view.source = "any"; view.q = "";
+  view.suits = "any"; view.cats.clear(); view.skills.clear(); view.stages.clear(); view.len = "any"; view.source = "any"; view.q = "";
   document.getElementById("libSource").value = "any"; document.getElementById("libSearch").value = "";
   if(libraryRowsByMode) renderLibrary();
 }

@@ -1593,23 +1593,69 @@ function inferGenCode(){
 }
 let fitTarget = null; // set when the coach uses Adjust length
 function targetRange(){ return fitTarget ? [fitTarget, fitTarget] : [55, 65]; } // Generate aims for 60 minutes, give or take 5
+// ---- Ages: drills flow up, not down ----
+// A drill written for an age suits that age and every older age in its range (a U10 drill suits U11 and U12).
+// "both" means the whole range. Older-age drills are only borrowed when a team's own pool is thin.
+const AGE_RANK = { u6:0, u7:1, u8:2, u9:3, u10:4, u11:5, u12:6, u16:7 };
+const RANGE_AGES = { u67:["u6","u7"], u89:["u8","u9"], core:["u10","u11","u12"], teen:["u16"] };
+const RANGE_LABEL = { u67:"U6–7", u89:"U8–9", core:"U10–12", teen:"13–18" };
+const RANGE_BELOW = { u89:"u67", core:"u89", teen:"core" };
+function ageSuits(drillAge, teamAge){
+  if(!teamAge || teamAge === "both" || !drillAge || drillAge === "both") return true;
+  const a = AGE_RANK[drillAge], t = AGE_RANK[teamAge];
+  return (a == null || t == null) ? drillAge === teamAge : a <= t;
+}
+// How a drill's age reads on a card: from its age to the top of its range ("U10–12", "U11–12"), or the range for whole-range drills.
+function ageLabel(age, rangeMode){
+  const ages = RANGE_AGES[rangeMode || mode] || [];
+  if(!age || age === "both" || rangeMode === "teen" || (!rangeMode && mode === "teen")) return RANGE_LABEL[rangeMode || mode] || "";
+  const top = ages[ages.length - 1];
+  return !top || age === top || ages.indexOf(age) < 0 ? age.toUpperCase() : age.toUpperCase() + "–" + top.replace(/^u/, "");
+}
 function matches(drill, filterCode, filterAge, filterPlayers){
   const codeOk = filterCode === "both" || drill.code === "both" || drill.code === filterCode;
-  const ageOk  = filterAge === "both" || drill.age === "both" || drill.age === filterAge;
+  const ageOk  = ageSuits(drill.age, filterAge);
   const playersOk = !filterPlayers || drill.minPlayers <= filterPlayers;
   return codeOk && ageOk && playersOk;
 }
 
-// ---- Drill pools: stay with the team's own age, but borrow when it's thin ----
-// Warm-ups are shared across the whole age range. Any other slot with fewer than
-// MIN_POOL drills for this age borrows from the neighbouring ages in the same range.
+// ---- Drill pools: the team's own age and younger in its range; borrow when it's thin ----
+// Warm-ups are shared across the whole range (plus the range below if there are few). Any skill slot with fewer
+// than MIN_POOL drills first adds easier drills from the range below, then older-age drills from its own range
+// (shown as Borrowed). The game uses the team's own age, then the whole range, and the range below only if there is none.
+const RANGE_DB = () => ({ u67:YOUNG67_DB, u89:YOUNG89_DB, core:DB, teen:TEEN_DB });
+// U8-9 skill games have no Passing/Tackling/... category, so their skill tags decide where they fit in a U10-12 session.
+function catForSkills(theme){
+  const t = theme || [];
+  if(t.includes("tackling")) return "tackling";
+  if(t.includes("possession")) return "possession";
+  if(t.includes("shooting") || t.includes("solo")) return "attacking";
+  if(t.some(x => ["handpass","striking","kicking","catching"].includes(x))) return "passing";
+  return null;
+}
+function belowFor(cat){
+  const below = RANGE_BELOW[mode];
+  if(!below) return [];
+  const src = RANGE_DB()[below] || {};
+  let list;
+  if(cat === "warmup") list = src.warmup || [];
+  else if(mode === "teen") list = src[cat] || [];
+  else if(cat === "game" || cat === "teamgame") list = src[cat] || src.game || src.teamgame || [];
+  else if(mode === "u89") list = cat === "skillgame" ? (src.skillgame || []) : [];
+  else list = (src.skillgame || []).filter(d => catForSkills(d.theme) === cat);
+  return list.filter(d => matches(d, codeFilter(), "both", state.players)).map(d => Object.assign({}, d, { fromRange: below }));
+}
 function poolFor(cat, list){
   const all = list || activeDB()[cat] || [];
   const ok = (d, age) => matches(d, codeFilter(), age, state.players);
-  const exact = all.filter(d => ok(d, state.age));
-  if(state.age === "both") return exact;
-  if(cat === "warmup" || exact.length < MIN_POOL) return all.filter(d => ok(d, "both"));
-  return exact;
+  if(cat === "warmup"){ const w = all.filter(d => ok(d, "both")); return w.length >= MIN_POOL ? w : w.concat(belowFor(cat)); }
+  // The finishing or team game only comes from the range below when there is none at all.
+  if(cat === "game" || cat === "teamgame"){ const g = all.filter(d => ok(d, state.age)); if(g.length) return g; const w = all.filter(d => ok(d, "both")); return w.length ? w : belowFor(cat); }
+  const own = all.filter(d => ok(d, state.age));
+  if(own.length >= MIN_POOL) return own;
+  let pool = own.concat(belowFor(cat));
+  if(pool.length < MIN_POOL && state.age !== "both") pool = all.filter(d => ok(d, "both")).concat(belowFor(cat));
+  return pool;
 }
 async function fetchRecentLogs(){
   try{
@@ -1681,6 +1727,8 @@ function pickFrom(pool, avoidName, useTheme, cat){
 
   // Planning a block: lean each skill slot toward this night's stage, if that still leaves a choice.
   if(blockStage !== null && (mode === "core" || mode === "teen") && (cat === "passing" || cat === "attacking" || cat === "possession")){
+    // Easier drills from the range below belong on the controlled nights; later nights use the team's own range when it has any.
+    if(blockStage > 0){ const ownRange = filtered.filter(d => !d.fromRange); if(ownRange.length) filtered = ownRange; }
     const usedNow = recentDrillIds();
     const sets = blockStage === 0 ? [[0], [0, 1]] : blockStage === 1 ? [[1], [0, 1]] : [[2], [1, 2]];
     for(const want of sets){
@@ -1695,10 +1743,9 @@ function pickFrom(pool, avoidName, useTheme, cat){
   const recent = recentDrillIds();
   const fresh = candidates.filter(d => !recent.has(d.id));
   if(fresh.length > 0) candidates = fresh;
-  // Drills made for this exact age count double when the pool includes borrowed ones.
   // Weights: drills made for this exact age count double, then this team's own feedback nudges them up or down.
   const fbMap = drillFeedbackFor(learnTeam());
-  const ws = candidates.map(d => (state.age !== "both" && d.age === state.age ? 2 : 1) * (fbMap ? learnWeight(fbMap[d.id]) : 1));
+  const ws = candidates.map(d => (state.age !== "both" && d.age === state.age && !d.fromRange ? 2 : 1) * (fbMap ? learnWeight(fbMap[d.id]) : 1));
   let r = Math.random() * ws.reduce((a, b) => a + b, 0);
   for(let i = 0; i < candidates.length; i++){ r -= ws[i]; if(r < 0) return candidates[i]; }
   return candidates[candidates.length - 1];
@@ -1814,8 +1861,10 @@ function removeSlot(id){
   render();
 }
 
+// Find a drill shown in a list: the team's own range first, then the easier drills borrowed from the range below.
+function findShownDrill(cat, name){ return (activeDB()[cat] || []).find(d => d.name === name) || belowFor(cat).find(d => d.name === name) || null; }
 function addDrillToSession(cat, name){
-  const drill = activeDB()[cat].find(d => d.name === name);
+  const drill = findShownDrill(cat, name);
   if(!drill) return;
   insertSlotInOrder({ id: freshId(), cat, drill });
   lastSkippedCategories = []; trimResultMsg = "";
@@ -1946,7 +1995,7 @@ function renderPicker(){
       <p class="p-desc">${escapeHtml(d.desc)}</p>
       <div class="add-drill-tags" style="margin-top:4px;">
         <span class="tag">${tagLabel(d.code)}</span>
-        ${d.age !== "both" ? `<span class="tag">${d.age.toUpperCase()}</span>` : ""}
+        <span class="tag">${ageLabel(d.age)}</span>
         <span class="duration-tag">${d.dur} min</span>
         ${playerEquipTags(d)}
       </div>
@@ -1954,7 +2003,7 @@ function renderPicker(){
   list.querySelectorAll(".picker-item").forEach(btn => {
     btn.addEventListener("click", () => {
       const target = findSlot(pickerSlotId);
-      const drill = target && (activeDB()[target.cat] || []).find(d => d.name === btn.dataset.name);
+      const drill = target && findShownDrill(target.cat, btn.dataset.name);
       if(drill){
         target.drill = drill; target.locked = false;
         lastSkippedCategories = []; trimResultMsg = "";
@@ -2018,7 +2067,7 @@ function renderAddDrillList(){
             <p class="p-desc">${escapeHtml(d.desc)}</p>
             <div class="add-drill-tags">
               <span class="tag ${tagClass(d.code)}">${tagLabel(d.code)}</span>
-              ${d.age !== "both" ? `<span class="tag tag-u10">${d.age.toUpperCase()}</span>` : ""}
+              <span class="tag tag-u10">${ageLabel(d.age)}</span>
               <span class="duration-tag">${d.dur} min</span>
               ${playerEquipTags(d)}
             </div>
@@ -2307,7 +2356,9 @@ function render(){
     const start = clock; clock += drill.dur;
     const agg = drill.id ? ratingsMap[drill.id] : null;
     const isOpen = expandedIds.has(s.id);
-    const borrowed = drill.age !== "both" && state.age !== "both" && drill.age !== state.age && s.cat !== "warmup";
+    // Borrowed = written for an older age in this range; From below = an easier drill from the range below.
+    const borrowed = !drill.fromRange && drill.age && drill.age !== "both" && state.age !== "both" && !ageSuits(drill.age, state.age) && s.cat !== "warmup";
+    const fromBelow = drill.fromRange && RANGE_LABEL[drill.fromRange];
     html += `
       <article class="slot ${meta.tl}${isOpen ? " open" : ""}${s.locked ? " kept" : ""}" data-slot="${s.id}">
         <p class="slot-label">${ico(CAT_ICON[s.cat] || "game")}${meta.label}${s.locked ? `<span class="kept-mark">${ico("lock")}Kept</span>` : ""}<span class="slot-time">${mmss(start)}–${mmss(clock)}</span></p>
@@ -2317,15 +2368,16 @@ function render(){
           <div class="slot-extra">
             <p class="extra-line"><b>What it's for.</b> ${SLOT_WHY[s.cat] || ""}</p>
             <p class="extra-line"><b>You'll need.</b> ${drill.minPlayers}+ players${drill.equipment && drill.equipment.length ? `. ${escapeHtml(drill.equipment.join(", "))}` : ""}.</p>
-            ${borrowed ? `<p class="extra-line"><b>Borrowed.</b> There is no ${state.age.toUpperCase()} drill for this block, so this one is from ${drill.age.toUpperCase()}. Check it suits your players.</p>` : ""}
+            ${borrowed ? `<p class="extra-line"><b>Borrowed.</b> There aren't enough ${state.age.toUpperCase()} drills for this part, so this one is written for ${drill.age.toUpperCase()}. Check it suits your players.</p>` : ""}
+            ${fromBelow ? `<p class="extra-line"><b>From ${fromBelow}.</b> There aren't enough drills for this part in your age range, so this is an easier one from the range below. Good for a controlled start; push the pace if it's too easy.</p>` : ""}
             ${drill.diagram ? `<div class="slot-diagram">${drill.diagram}</div>` : `<p class="extra-line muted">No diagram for this drill yet.</p>`}
             ${drill.source ? `<p class="extra-line source-line">Source: ${escapeHtml(drill.source)}</p>` : ""}
           </div>
           <div class="slot-meta">
             <span class="tag">${drill.code === "hurling" ? ico("hurling") : drill.code === "football" ? ico("football") : ""}${tagLabel(drill.code)}</span>
-            ${drill.age !== "both" ? (borrowed
-                ? `<span class="tag tag-edited">From ${drill.age.toUpperCase()}</span>`
-                : `<span class="tag">${drill.age.toUpperCase()}</span>`) : ""}
+            ${fromBelow ? `<span class="tag tag-edited">From ${fromBelow}</span>`
+              : borrowed ? `<span class="tag tag-edited">Borrowed: ${drill.age.toUpperCase()}</span>`
+              : `<span class="tag">${ageLabel(drill.age)}</span>`}
             ${playerEquipTags(drill)}
             ${drill.isCustom ? `<span class="tag tag-new">${ico("custom")}Custom</span>` : ""}
             ${drill.isEdited ? `<span class="tag tag-edited">${ico("edit")}Edited</span>` : ""}
@@ -2608,7 +2660,7 @@ function generateSessionHTML(){
     const codeTag = drill.code === "hurling" ? '<span class="tag tag-hurling">Hurling</span>'
                   : drill.code === "football" ? '<span class="tag tag-football">Football</span>'
                   : '<span class="tag tag-both">Both codes</span>';
-    const ageTag = drill.age !== "both" ? `<span class="tag tag-u10">${drill.age.toUpperCase()}</span>` : "";
+    const ageTag = drill.fromRange ? `<span class="tag tag-u10">From ${RANGE_LABEL[drill.fromRange]}</span>` : `<span class="tag tag-u10">${ageLabel(drill.age)}</span>`;
     const equipStr = drill.equipment && drill.equipment.length ? ` · ${escapeHtml(drill.equipment.join(", "))}` : "";
     const diagramHtml = drill.diagram ? `<div class="diagram-wrap">${drill.diagram}</div>` : "";
     return `
@@ -4421,7 +4473,7 @@ var AGE_LADDER = {
   u12:  { focus:"accuracy and consistency, with more work under pressure and simple attack and defence", ref:"GAA Player Capacities, ages 10-11 moving into 12-13", basis:"mixed" },
   teen: { focus:"skills under pressure and in changing conditions, moving towards open play and position-specific work", ref:"GAA Player Capacities, ages 12-17", basis:"framework" }
 };
-var WHY_VERSION = "Rules version 3, last reviewed 11 October 2026";
+var WHY_VERSION = "Rules version 4, last reviewed 15 October 2026";
 var WHY_LINKS = {
   cap:   { l:"GAA Player Capacities", u:"https://learning.gaa.ie/sites/default/files/Player%20Capacities.pdf" },
   prog:  { l:"GAA: Putting together a sustainable coaching programme", u:"https://learning.gaa.ie/sites/default/files/Putting%20together%20a%20sustainable%20coaching%20programme.pdf" },
@@ -4432,6 +4484,7 @@ var WHY_LINKS = {
 };
 var WHY_RULES = [
   { t:"Each age has its own emphasis", tag:"GAA framework", d:"Skills are grouped by the GAA's age stages, for example accuracy and consistency at 10-11 and skills under pressure from 12.", src:["cap"] },
+  { t:"Drills suit their age and older", tag:"Coach judgement", d:"A team gets drills written for its own age and younger within its age range (a U10 drill suits U11 and U12), and its own age comes up most. Drills for older ages, or easier ones from the range below, only come in when there aren't enough, and are marked Borrowed or From U8-9.", src:[] },
   { t:"No season phases for U12 and under", tag:"GAA framework", d:"GAA programme material lists no periodisation up to U12, so there is no pre-season, mid-season or run-in setting for these ages.", src:["prog"] },
   { t:"A block moves each skill from controlled to moving to under pressure", tag:"Framework + judgement", d:"The sequence follows Player Capacities. How fast it moves across a block is our own choice. It applies from U10 up. Each drill's stage was read from its description and tagged by us, not checked by coaches, so shuffle any night you disagree with.", src:["cap"] },
   { t:"A game-based drill in every session", tag:"Some support", d:"U10 and up always get a game; younger teams get skill and team games. A 2025 review found game-based practice slightly better than technique-first for decision-making and skills, with limited confidence.", src:["gba"] },
@@ -4469,6 +4522,7 @@ var BLOCK_STAGE_LABEL = ["Controlled", "Moving", "Under pressure"];
 var OPP_RE = /\b(\d\s?v\s?\d|\d\s?vs\.?\s?\d|opposed|opposition|defender|defenders|defend|defending|pressure|pressurised|contest|contested|tackle|tackling|block down|chasers?|compete|competition)\b/i;
 var MOVE_RE = /\b(run|runs|running|jog|jogging|sprint|sprints|move|moving|solo|dribble|carry|weave|cut|angled|overlap|rotate)\b/i;
 function drillLevel(d){
+  if(d.fromRange) return 0; // an easier drill from the range below sits with the controlled nights of a block
   if(typeof d.level === "number") return d.level; // read and tagged by hand in the library; the wording check is the fallback
   const t = (d.name || "") + " " + (d.desc || "");
   if(OPP_RE.test(t)) return 2;
